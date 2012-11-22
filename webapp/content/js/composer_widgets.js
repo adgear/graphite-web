@@ -16,6 +16,9 @@ var DEFAULT_WINDOW_WIDTH = 600;
 var DEFAULT_WINDOW_HEIGHT = 400;
 var Composer;
 
+var minutes = {"minutes": 1, "hours":60, "days": 60*24, "weeks": 60*24*7, "months": 60*24*30, "years": 60*24*365 };
+var lastUnits = "hours";
+
 function createComposerWindow(myComposer) {
   //This global is an ugly hack, probly need to make these widgets into more formal objects
   //and keep their associated Composer object as an attribute.
@@ -24,12 +27,28 @@ function createComposerWindow(myComposer) {
   //Can't define this inline because I need a reference in a closure below
   var timeDisplay = new Ext.Toolbar.TextItem({text: "Now showing the past 24 hours"});
 
+ var quantityField = new Ext.form.NumberField({
+         id: 'time-quantity',
+         grow: true,
+         value: 24,
+         listeners: {change: recentSelectionMade, specialkey: ifEnter(recentSelectionMade)}
+     });
+ var unitSelector = new Ext.form.ComboBox({
+         id: 'time-units',
+         editable: false,
+         triggerAction: 'all',
+         mode: 'local',
+         store: ['minutes', 'hours', 'days', 'weeks', 'months', 'years'],
+         width: 75,
+         value: lastUnits,
+         listeners: {select: recentSelectionMade}
+     });
+
   var topToolbar = [
-    createToolbarButton('Update Graph', 'updateGraph.gif', updateGraph),
-    '-',
     createToolbarButton('Select a Date Range', 'calBt.gif', toggleWindow(createCalendarWindow) ),
     createToolbarButton('Select Recent Data', 'arrow1.gif', toggleWindow(createRecentWindow) ),
     '-',
+    quantityField, unitSelector,
     timeDisplay
   ];
   if (GraphiteConfig.showMyGraphs) {
@@ -39,9 +58,11 @@ function createComposerWindow(myComposer) {
   }
 
   var bottomToolbar = [
-    { text: "Graph Options", menu: createOptionsMenu() },
-    { text: "Graph Data", handler: toggleWindow(GraphDataWindow.create.createDelegate(GraphDataWindow)) },
-    { text: "Auto-Refresh", id: 'autorefresh_button', enableToggle: true, toggleHandler: toggleAutoRefresh }
+    { text: "Options", menu: createOptionsMenu() },
+    { text: "Data", handler: toggleWindow(GraphDataWindow.create.createDelegate(GraphDataWindow)) },
+    { text: 'Refresh', handler: updateGraph},
+    { text: "Auto-Refresh", id: 'autorefresh_button', enableToggle: true, toggleHandler: toggleAutoRefresh },
+    { text: 'Clear', handler: function() {Composer.loadURL('');}}
   ];
 
   var win = new Ext.Window({
@@ -298,6 +319,9 @@ function createRecentWindow() {
 function recentSelectionMade(combo, record, index) {
   var quantity = Ext.getCmp('time-quantity').getValue();
   var units = Ext.getCmp('time-units').getValue();
+  quantity = Math.ceil(quantity * minutes[lastUnits] / minutes[units]);
+  lastUnits = units;
+  Ext.getCmp('time-quantity').setValue(quantity);
   var fromString = '-' + quantity + units;
   Composer.url.setParam('from', fromString);
   Composer.url.removeParam('until');
