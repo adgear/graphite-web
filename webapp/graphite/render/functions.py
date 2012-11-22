@@ -2405,7 +2405,28 @@ PieFunctions = {
   'minimum' : pieMinimum,
 }
 
+def nm(requestContext, seriesList, numSegs = 1):
+    for s in seriesList:
+        try:
+            m = re.search('\.([A-z0-9_\*]+)\.([A-z0-9_\*]+)(,|\)|$)', s.name)
+            if numSegs == 1:
+                s.name= m.group(2)
+            else:
+                s.name = m.group(1) +"."+ m.group(2)
+        except Exception:
+            pass
+    return seriesList
+
+def nm2(requestContext, seriesList):
+  return nm(requestContext, seriesList, 2)
+
+def smooth(requestContext, seriesList):
+  return movingAverage(requestContext, seriesList, 25)
+
 SeriesFunctions = {
+  # Datacratic functions
+  'nm' : nm, 'nm2': nm2, 'smooth' : smooth,
+
   # Combine functions
   'sumSeries' : sumSeries,
   'sum' : sumSeries,
