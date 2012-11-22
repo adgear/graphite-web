@@ -45,8 +45,12 @@ function createComposerWindow(myComposer) {
      });
 
   var topToolbar = [
-    createToolbarButton('Select a Date Range', 'calBt.gif', toggleWindow(createCalendarWindow) ),
-    createToolbarButton('Select Recent Data', 'arrow1.gif', toggleWindow(createRecentWindow) ),
+    { text: "Auto-Refresh", id: 'autorefresh_button', enableToggle: true, toggleHandler: toggleAutoRefresh },
+    { text: "Options", menu: createOptionsMenu() },
+    { text: "Data", handler: toggleWindow(GraphDataWindow.create.createDelegate(GraphDataWindow)) },
+    { text: 'Refresh', handler: updateGraph},
+    { text: 'Clear', handler: function() {Composer.loadURL('');}}
+    { text: 'Date Range...', handler: toggleWindow(createCalendarWindow)}
     '-',
     quantityField, unitSelector,
     timeDisplay
@@ -57,14 +61,6 @@ function createComposerWindow(myComposer) {
     topToolbar.splice(0, 0, saveButton, deleteButton);
   }
 
-  var bottomToolbar = [
-    { text: "Options", menu: createOptionsMenu() },
-    { text: "Data", handler: toggleWindow(GraphDataWindow.create.createDelegate(GraphDataWindow)) },
-    { text: 'Refresh', handler: updateGraph},
-    { text: "Auto-Refresh", id: 'autorefresh_button', enableToggle: true, toggleHandler: toggleAutoRefresh },
-    { text: 'Clear', handler: function() {Composer.loadURL('');}}
-  ];
-
   var win = new Ext.Window({
     width: DEFAULT_WINDOW_WIDTH,
     height: DEFAULT_WINDOW_HEIGHT,
@@ -74,7 +70,6 @@ function createComposerWindow(myComposer) {
     maximizable: true,
     closable: false,
     tbar: topToolbar,
-    buttons: bottomToolbar,
     buttonAlign: 'left',
     items: { html: "<img id='image-viewer' src='/render'/>", region: "center" },
     listeners: {
