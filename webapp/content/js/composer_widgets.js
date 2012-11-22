@@ -55,7 +55,9 @@ function createComposerWindow(myComposer) {
     { text: 'Date Range...', handler: toggleWindow(createCalendarWindow)},
     '-',
     quantityField, unitSelector,
-    timeDisplay
+    timeDisplay,
+    '->',    
+    createToolbarButton('Open in GraphPlot', 'line_chart.png', function() { window.open('/graphlot/?' + Composer.url.queryString,'_blank') })
   ];
   if (GraphiteConfig.showMyGraphs) {
     var saveButton = createToolbarButton('Save to My Graphs', 'save.gif', saveMyGraph);
