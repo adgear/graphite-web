@@ -46,11 +46,13 @@ function createComposerWindow(myComposer) {
 
   var topToolbar = [
     { text: "Auto-Refresh", id: 'autorefresh_button', enableToggle: true, toggleHandler: toggleAutoRefresh },
+    '-',
     { text: "Options", menu: createOptionsMenu() },
     { text: "Data", handler: toggleWindow(GraphDataWindow.create.createDelegate(GraphDataWindow)) },
     { text: 'Refresh', handler: updateGraph},
-    { text: 'Clear', handler: function() {Composer.loadURL('');}}
-    { text: 'Date Range...', handler: toggleWindow(createCalendarWindow)}
+    { text: 'Clear', handler: function() {Composer.loadURL('');}},
+    '-',
+    { text: 'Date Range...', handler: toggleWindow(createCalendarWindow)},
     '-',
     quantityField, unitSelector,
     timeDisplay
