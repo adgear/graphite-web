@@ -115,6 +115,9 @@ function createTreePanel(){
     }
 
     if (!node.leaf) {
+      if(!node.isExpanded()) {
+        node.reload();
+      }
       node.toggle();
       return;
     }
