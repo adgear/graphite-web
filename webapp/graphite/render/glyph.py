@@ -166,7 +166,7 @@ class Graph:
 
     self.foregroundColor = params.get('fgcolor',self.defaultForeground)
     self.backgroundColor = params.get('bgcolor',self.defaultBackground)
-    self.setColor( self.backgroundColor )
+    self.setColor( "white" )
     self.drawRectangle( 0, 0, self.width, self.height )
 
     if 'colorList' in params:
@@ -1343,6 +1343,8 @@ class LineGraph(Graph):
     # Not sure how to handle this for 2 y-axes
     # Just using the left side info for the grid.  
 
+    self.setColor( self.backgroundColor )
+    self.drawRectangle( self.area['xmin'], self.area['ymin'], self.area['xmax']-self.area['xmin'], self.area['ymax']-self.area['ymin'] )
     #Horizontal grid lines
     leftSide = self.area['xmin']
     rightSide = self.area['xmax']
@@ -1355,7 +1357,7 @@ class LineGraph(Graph):
       labels.append(self.logBase * max(labels))
 
     for i, value in enumerate(labels):
-      self.ctx.set_line_width(0.4)
+      self.ctx.set_line_width(1.2)
       self.setColor( self.params.get('majorGridLineColor',self.defaultMajorGridLineColor) )
 
       if self.secondYAxis:
@@ -1381,7 +1383,7 @@ class LineGraph(Graph):
         # starting from the initial valueLower, we add the minor distance
         # for each minor gridline that we wish to draw, and then draw it.
         for minor in range(self.minorY):
-          self.ctx.set_line_width(0.3)
+          self.ctx.set_line_width(0.5)
           self.setColor( self.params.get('minorGridLineColor',self.defaultMinorGridLineColor) )
 
           # the current minor gridline value is halfway between the current and next major gridline values
