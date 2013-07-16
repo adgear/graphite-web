@@ -15,6 +15,7 @@ limitations under the License."""
 import socket
 import struct
 import time
+from threading import Thread
 from django.conf import settings
 from graphite.logger import log
 from graphite.storage import STORE, LOCAL_STORE
@@ -208,6 +209,10 @@ for host in settings.CARBONLINK_HOSTS:
 CarbonLink = CarbonLinkPool(hosts, settings.CARBONLINK_TIMEOUT)
 
 
+def FetcherThread(dbFile, startTime, endTime, result, index):
+      result[index] = dbFile.fetch( timestamp(startTime), timestamp(endTime) )
+
+
 # Data retrieval API
 def fetchData(requestContext, pathExpr):
   seriesList = []
@@ -219,9 +224,29 @@ def fetchData(requestContext, pathExpr):
   else:
     store = STORE
 
-  for dbFile in store.find(pathExpr):
+  dbFiles = list(store.find(pathExpr))
+
+  threads =      [None] * len(dbFiles)
+  fetchResults = [None] * len(dbFiles)
+
+  # Start the jobs
+  for i in range(len(dbFiles)):
+    threads[i] = Thread(target = FetcherThread,
+                        args = (dbFiles[i], startTime,
+                                endTime, fetchResults, i))
+    threads[i].start()
+
+  # Gather the results
+  for i in range(len(dbFiles)):
+    threads[i].join()
+
+  for i, dbFile in enumerate(dbFiles):
+
+    dbResults = fetchResults[i]
+
+    #print dbFile.metric_path
     log.metric_access(dbFile.metric_path)
-    dbResults = dbFile.fetch( timestamp(startTime), timestamp(endTime) )
+
     try:
       cachedResults = CarbonLink.query(dbFile.real_metric)
       results = mergeResults(dbResults, cachedResults)
