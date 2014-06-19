@@ -67,7 +67,7 @@ function createComposerWindow(myComposer) {
     { text: 'Clear', handler: function() {Composer.loadURL('');}},
     '-',
     { text: 'Date Range...', handler: toggleWindow(createCalendarWindow)},
-    { text: 'Graphplot', handler: function() { window.open('/graphlot/?' + Composer.url.queryString,'_blank') })},
+    { text: 'Graphplot', handler: function() { window.open('/graphlot/?' + Composer.url.queryString,'_blank') }},
     '-',
     quantityField, unitSelector,
     timeDisplay,
