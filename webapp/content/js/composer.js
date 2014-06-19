@@ -108,6 +108,7 @@ GraphiteComposer.prototype = {
       var now = new Date();
       var unixTime = now.valueOf() / 1000;
       this.url.setParam('_salt', unixTime.toString() );
+      this.url.setParam('noCache', 1);
       img.src = this.url.getURL();
     }
   },
