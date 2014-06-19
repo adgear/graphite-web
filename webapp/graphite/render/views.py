@@ -12,7 +12,9 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License."""
 import csv
-from time import time, strftime, localtime
+import math
+from datetime import datetime
+from time import time
 from random import shuffle
 from httplib import CannotSendRequest
 from urllib import urlencode
@@ -24,7 +26,12 @@ try:
 except ImportError:
   import pickle
 
-from graphite.util import getProfileByUsername, json
+try:  # See if there is a system installation of pytz first
+  import pytz
+except ImportError:  # Otherwise we fall back to Graphite's bundled version
+  from graphite.thirdparty import pytz
+
+from graphite.util import getProfileByUsername, json, unpickle
 from graphite.remote_storage import HTTPConnectionWithTimeout
 from graphite.logger import log
 from graphite.render.evaluator import evaluateTarget
@@ -38,6 +45,7 @@ from django.template import Context, loader
 from django.core.cache import cache
 from django.core.exceptions import ObjectDoesNotExist
 from django.conf import settings
+from django.utils.timezone import get_current_timezone
 
 
 def renderView(request):
@@ -48,6 +56,7 @@ def renderView(request):
   requestContext = {
     'startTime' : requestOptions['startTime'],
     'endTime' : requestOptions['endTime'],
+    'now': requestOptions['now'],
     'localOnly' : requestOptions['localOnly'],
     'data' : []
   }
@@ -115,17 +124,41 @@ def renderView(request):
 
       for series in data:
         for i, value in enumerate(series):
-          timestamp = localtime( series.start + (i * series.step) )
-          writer.writerow( (series.name, strftime("%Y-%m-%d %H:%M:%S", timestamp), value) )
+          timestamp = datetime.fromtimestamp(series.start + (i * series.step), requestOptions['tzinfo'])
+          writer.writerow((series.name, timestamp.strftime("%Y-%m-%d %H:%M:%S"), value))
 
       return response
 
     if format == 'json':
       series_data = []
-      for series in data:
-        timestamps = range(series.start, series.end, series.step)
-        datapoints = zip(series, timestamps)
-        series_data.append( dict(target=series.name, datapoints=datapoints) )
+      if 'maxDataPoints' in requestOptions and any(data):
+        startTime = min([series.start for series in data])
+        endTime = max([series.end for series in data])
+        timeRange = endTime - startTime
+        maxDataPoints = requestOptions['maxDataPoints']
+        for series in data:
+          numberOfDataPoints = timeRange/series.step
+          if maxDataPoints < numberOfDataPoints:
+            valuesPerPoint = math.ceil(float(numberOfDataPoints) / float(maxDataPoints))
+            secondsPerPoint = int(valuesPerPoint * series.step)
+            # Nudge start over a little bit so that the consolidation bands align with each call
+            # removing 'jitter' seen when refreshing.
+            nudge = secondsPerPoint + (series.start % series.step) - (series.start % secondsPerPoint)
+            series.start = series.start + nudge
+            valuesToLose = int(nudge/series.step)
+            for r in range(1, valuesToLose):
+              del series[0]
+            series.consolidate(valuesPerPoint)
+            timestamps = range(series.start, series.end, secondsPerPoint)
+          else:
+            timestamps = range(series.start, series.end, series.step)
+          datapoints = zip(series, timestamps)
+          series_data.append(dict(target=series.name, datapoints=datapoints))
+      else:
+        for series in data:
+          timestamps = range(series.start, series.end, series.step)
+          datapoints = zip(series, timestamps)
+          series_data.append( dict(target=series.name, datapoints=datapoints) )
 
       if 'jsonp' in requestOptions:
         response = HttpResponse(
@@ -199,7 +232,19 @@ def parseOptions(request):
   requestOptions['pieMode'] = queryParams.get('pieMode', 'average')
   requestOptions['cacheTimeout'] = int( queryParams.get('cacheTimeout', settings.DEFAULT_CACHE_DURATION) )
   requestOptions['targets'] = []
-  for target in queryParams.getlist('target'):
+
+  # Extract the targets out of the queryParams
+  mytargets = []
+  # Normal format: ?target=path.1&target=path.2
+  if len(queryParams.getlist('target')) > 0:
+    mytargets = queryParams.getlist('target')
+
+  # Rails/PHP/jQuery common practice format: ?target[]=path.1&target[]=path.2
+  elif len(queryParams.getlist('target[]')) > 0:
+    mytargets = queryParams.getlist('target[]')
+
+  # Collect the targets
+  for target in mytargets:
     requestOptions['targets'].append(target)
 
   if 'pickle' in queryParams:
@@ -212,6 +257,8 @@ def parseOptions(request):
       requestOptions['jsonp'] = queryParams['jsonp']
   if 'noCache' in queryParams:
     requestOptions['noCache'] = True
+  if 'maxDataPoints' in queryParams and queryParams['maxDataPoints'].isdigit():
+    requestOptions['maxDataPoints'] = int(queryParams['maxDataPoints'])
 
   requestOptions['localOnly'] = queryParams.get('local') == '1'
 
@@ -229,23 +276,39 @@ def parseOptions(request):
         continue
       graphOptions[opt] = val
 
+  tzinfo = get_current_timezone()
+  if 'tz' in queryParams:
+    try:
+      tzinfo = pytz.timezone(queryParams['tz'])
+    except pytz.UnknownTimeZoneError:
+      pass
+  requestOptions['tzinfo'] = tzinfo
+
   # Get the time interval for time-oriented graph types
   if graphType == 'line' or graphType == 'pie':
+    if 'now' in queryParams:
+        now = parseATTime(queryParams['now'])
+    else:
+        now = datetime.now()
+
     if 'until' in queryParams:
-      untilTime = parseATTime( queryParams['until'] )
+      untilTime = parseATTime(queryParams['until'], tzinfo, now)
     else:
-      untilTime = parseATTime('now')
+      untilTime = now
     if 'from' in queryParams:
-      fromTime = parseATTime( queryParams['from'] )
+      fromTime = parseATTime(queryParams['from'], tzinfo, now)
     else:
-      fromTime = parseATTime('-1d')
+      fromTime = parseATTime('-1d', tzinfo, now)
+
+
 
     startTime = min(fromTime, untilTime)
     endTime = max(fromTime, untilTime)
     assert startTime != endTime, "Invalid empty time range"
-    
+
     requestOptions['startTime'] = startTime
     requestOptions['endTime'] = endTime
+    requestOptions['now'] = now
 
   return (graphOptions, requestOptions)
 
@@ -303,7 +366,7 @@ def renderLocalView(request):
     optionsPickle = reqParams.read()
     reqParams.close()
     graphClass = GraphTypes[graphType]
-    options = pickle.loads(optionsPickle)
+    options = unpickle.loads(optionsPickle)
     image = doImageRender(graphClass, options)
     log.rendering("Delegated rendering request took %.6f seconds" % (time() -  start))
     return buildResponse(image)

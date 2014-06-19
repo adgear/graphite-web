@@ -10,7 +10,21 @@
  *    distributed under the License is distributed on an "AS IS" BASIS,
  *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  *    See the License for the specific language governing permissions and
- *    limitations under the License. */
+ *    limitations under the License.
+ *
+ *
+ * ======================================================================
+ *
+ *     PLEASE DO NOT USE A COMMA AFTER THE FINAL ITEM IN A LIST.
+ *
+ * ======================================================================
+ *
+ * It works fine in FF / Chrome, but completely breaks Internet Explorer.
+ * Thank you.
+ *
+*/
+
+
 
 var DEFAULT_WINDOW_WIDTH = 600;
 var DEFAULT_WINDOW_HEIGHT = 400;
@@ -53,6 +67,7 @@ function createComposerWindow(myComposer) {
     { text: 'Clear', handler: function() {Composer.loadURL('');}},
     '-',
     { text: 'Date Range...', handler: toggleWindow(createCalendarWindow)},
+    { text: 'Graphplot', handler: function() { window.open('/graphlot/?' + Composer.url.queryString,'_blank') })},
     '-',
     quantityField, unitSelector,
     timeDisplay,
@@ -279,6 +294,31 @@ function toggleWindow(createFunc) {
   return toggler;
 }
 
+function createURLWindow() {
+  var urlField = new Ext.form.TextField({
+    id: 'from-url',
+    allowBlank: false,
+    vtype: 'url',
+    listeners: { change: urlChosen, specialkey: ifEnter(urlChosen) }
+  });
+
+  return new Ext.Window({
+      title: "Enter a URL to build graph from",
+      layout: 'fit',
+      height: 60,
+      width: 450,
+      closeAction: 'hide',
+      items: [
+        urlField
+      ]
+  });
+}
+
+function urlChosen() {
+  var url = Ext.getCmp('from-url').getValue();
+  Composer.loadMyGraph("temp", decodeURIComponent(url))
+}
+
 function createRecentWindow() {
   var quantityField = new Ext.form.NumberField({
     id: 'time-quantity',
@@ -342,7 +382,7 @@ function saveMyGraph(button, e) {
       tmpArray = tmpArray.slice(1, tmpArray.length);
       myGraphName = tmpArray.join('.');
     }
-  } 
+  }
   Ext.MessageBox.prompt(
     "Save to My Graphs", //title
     "Please enter a name for your Graph", //prompt message
@@ -491,6 +531,21 @@ var GraphDataWindow = {
           id: 'removeTargetButton',
           handler: this.removeTarget.createDelegate(this)
         }, {
+          text: 'Move',
+          id: 'moveButton',
+          menuAlign: 'tr-tl',
+          menu: {
+            subMenuAlign: 'tr-tl',
+            defaults: {
+              defaultAlign: 'tr-tl',
+            },
+            items: [
+              { text: 'Move Up', handler: this.moveTargetUp.createDelegate(this) },
+              { text: 'Move Down', handler: this.moveTargetDown.createDelegate(this) },
+              { text: 'Swap', handler: this.swapTargets.createDelegate(this), id: 'menuSwapTargets' }
+            ]
+          }
+        }, {
           text: 'Apply Function',
           id: 'applyFunctionButton',
           menuAlign: 'tr-tl',
@@ -521,10 +576,10 @@ var GraphDataWindow = {
       ],
       listeners: {
         afterrender: function () {
-                       if (_this.targetList.getNodes().length > 0) {
-                         _this.targetList.select(0);
-                       }
-                     }
+          if (_this.targetList.getNodes().length > 0) {
+            _this.targetList.select(0);
+          }
+        }
       }
     });
     return this.window;
@@ -546,12 +601,20 @@ var GraphDataWindow = {
       Ext.getCmp('removeTargetButton').disable();
       Ext.getCmp('applyFunctionButton').disable();
       Ext.getCmp('undoFunctionButton').disable();
+      Ext.getCmp('moveButton').disable();
     } else {
       Ext.getCmp('editTargetButton').enable();
       Ext.getCmp('removeTargetButton').enable();
       Ext.getCmp('applyFunctionButton').enable();
       Ext.getCmp('undoFunctionButton').enable();
+      Ext.getCmp('moveButton').enable();
     }
+    
+    // Swap Targets
+    if (selected == 2)
+      Ext.getCmp('menuSwapTargets').enable();
+    else
+      Ext.getCmp('menuSwapTargets').disable();
   },
 
   targetContextMenu: function (targetList, index, node, e) {
@@ -562,13 +625,24 @@ var GraphDataWindow = {
 
     var removeItem = {text: "Remove", handler: this.removeTarget.createDelegate(this)};
     var editItem = {text: "Edit", handler: this.editTarget.createDelegate(this)};
+    var moveMenu = {
+      text: "Move",
+      menu: [
+        { text: "Move Up", handler: this.moveTargetUp.createDelegate(this) },
+        { text: "Move Down", handler: this.moveTargetDown.createDelegate(this) },
+        { text: "Swap", handler: this.swapTargets.createDelegate(this), disabled: true }
+      ]
+    };
 
     if (this.getSelectedTargets().length == 0) {
       removeItem.disabled = true;
       editItem.disabled = true;
+      moveMenu.disabled = true;
     }
-
-    var contextMenu = new Ext.menu.Menu({ items: [removeItem, editItem] });
+    if (this.getSelectedTargets().length == 2)
+      moveMenu.menu[2].disabled = false;
+    
+    var contextMenu = new Ext.menu.Menu({ items: [removeItem, editItem, moveMenu] });
     contextMenu.showAt( e.getXY() );
 
     e.stopEvent();
@@ -860,6 +934,78 @@ var GraphDataWindow = {
 
     win.show();
   },
+  
+  moveTargetUp: function() {
+    this._moveTarget(-1);
+  },
+  
+  moveTargetDown: function() {
+    this._moveTarget(1);
+  },
+  
+  swapTargets: function() {
+    this._swapTargets();
+  },
+  
+  _moveTarget: function(direction) {
+    store = this.targetList.getStore();
+    selectedRecords = this.targetList.getSelectedRecords();
+      
+    // Don't move past boundaries
+    exit = false;
+    Ext.each(selectedRecords, function(record) {
+      index = store.indexOf(record);
+
+      if (direction == -1 && index == 0) {
+        exit = true;
+        return false;
+      }
+      else if (direction == 1 && index == store.getCount() - 1) {
+        exit = true;
+        return false;
+      }
+    });
+    if (exit)
+      return;
+      
+    newSelections = [];
+    Ext.each(selectedRecords, function(recordA) {
+      indexA = store.indexOf( recordA );
+      valueA = recordA.get('value');
+      recordB = store.getAt( indexA + direction );
+
+      // swap
+      recordA.set('value', recordB.get('value'));
+      recordB.set('value', valueA);
+      recordA.commit();
+      recordB.commit();
+
+      newSelections.push( indexA + direction );
+    });
+      
+    Composer.syncTargetList();
+    Composer.updateImage();
+    this.targetList.select(newSelections);
+  },
+  
+  _swapTargets: function() {
+    selectedRecords = this.targetList.getSelectedRecords();
+    if (selectedRecords.length != 2)
+      return;
+      
+    recordA = selectedRecords[0];
+    recordB = selectedRecords[1];
+
+    valueA = recordA.get('value');
+    recordA.set('value', recordB.get('value'));
+    recordB.set('value', valueA);
+
+    recordA.commit();
+    recordB.commit();
+
+    Composer.syncTargetList();
+    Composer.updateImage();
+  },
 
   addWlSelected: function (item, e) {
     Ext.Ajax.request({
@@ -908,7 +1054,8 @@ function createFunctionsMenu() {
         {text: 'Min Values', handler: applyFuncToAll('minSeries')},
         {text: 'Max Values', handler: applyFuncToAll('maxSeries')},
         {text: 'Group', handler: applyFuncToAll('group')},
-        {text: 'Range', handler: applyFuncToAll('rangeOfSeries')}
+        {text: 'Range', handler: applyFuncToAll('rangeOfSeries')},
+        {text: 'Count', handler: applyFuncToEach('countSeries')}
       ]
     }, {
       text: 'Transform',
@@ -917,6 +1064,7 @@ function createFunctionsMenu() {
         {text: 'ScaleToSeconds', handler: applyFuncToEachWithInput('scaleToSeconds', 'Please enter a number of seconds to scale to')},
         {text: 'Offset', handler: applyFuncToEachWithInput('offset', 'Please enter the value to offset Y-values by')},
         {text: 'Derivative', handler: applyFuncToEach('derivative')},
+        {text: 'Time-adjusted Derivative', handler: applyFuncToEachWithInput('perSecond', "Please enter a maximum value if this metric is a wrapping counter (or just leave this blank)", {allowBlank: true})},
         {text: 'Integral', handler: applyFuncToEach('integral')},
         {text: 'Percentile Values', handler: applyFuncToEachWithInput('percentileOfSeries', "Please enter the percentile to use")},
         {text: 'Non-negative Derivative', handler: applyFuncToEachWithInput('nonNegativeDerivative', "Please enter a maximum value if this metric is a wrapping counter (or just leave this blank)", {allowBlank: true})},
@@ -947,8 +1095,8 @@ function createFunctionsMenu() {
           menu: [
             {text: 'Remove Above Value', handler: applyFuncToEachWithInput('removeAboveValue', 'Set any values above ___ to None')},
             {text: 'Remove Above Percentile', handler: applyFuncToEachWithInput('removeAbovePercentile', 'Set any values above the ___th percentile to None')},
-            {text: 'Remove Below Value', handler: applyFuncToEachWithInput('removeAboveValue', 'Set any values above ___ to None')},
-            {text: 'Remove Below Percentile', handler: applyFuncToEachWithInput('removeAbovePercentile', 'Set any values above the ___th percentile to None')}
+            {text: 'Remove Below Value', handler: applyFuncToEachWithInput('removeBelowValue', 'Set any values below ___ to None')},
+            {text: 'Remove Below Percentile', handler: applyFuncToEachWithInput('removeBelowPercentile', 'Set any values below the ___th percentile to None')}
           ]
         },
         {text: 'Most Deviant', handler: applyFuncToEachWithInput('mostDeviant', 'Draw the ___ metrics with the highest standard deviation')},
@@ -987,11 +1135,16 @@ function createFunctionsMenu() {
         		]},
         {text: 'Color', handler: applyFuncToEachWithInput('color', 'Set the color for this graph target', {quote: true})},
         {text: 'Alpha', handler: applyFuncToEachWithInput('alpha', 'Set the alpha (transparency) for this graph target (between 0.0 and 1.0)')},
-        {text: 'Aggregate By Sum', handler: applyFuncToEach('cumulative')},
+        {text: 'Consolidate By',
+                menu: [
+                        {text: "Sum", handler: applyFuncToEach('consolidateBy', '"sum"')},
+                        {text: "Max", handler: applyFuncToEach('consolidateBy', '"max"')},
+                        {text: "Min", handler: applyFuncToEach('consolidateBy', '"min"')}
+                      ]},
         {text: 'Draw non-zero As Infinite', handler: applyFuncToEach('drawAsInfinite')},
         {text: 'Line Width', handler: applyFuncToEachWithInput('lineWidth', 'Please enter a line width for this graph target')},
         {text: 'Dashed Line', handler: applyFuncToEach('dashed')},
-        {text: 'Keep Last Value', handler: applyFuncToEach('keepLastValue')},
+        {text: 'Keep Last Value', handler: applyFuncToEachWithInput('keepLastValue', 'Please enter the maximum number of "None" datapoints to overwrite, or leave empty for no limit. (default: empty)', {allowBlank: true})},
         {text: 'Transform Nulls', handler: applyFuncToEachWithInput('transformNull', 'Please enter the value to transform null values to')},
         {text: 'Substring', handler: applyFuncToEachWithInput('substr', 'Enter a starting position')},
         {text: 'Group', handler: applyFuncToAll('group')},
@@ -1038,7 +1191,7 @@ function createOptionsMenu() {
       menuRadioItem("yUnit", "Standard", "yUnitSystem", "si"),
       menuRadioItem("yUnit", "Binary", "yUnitSystem", "binary"),
       menuRadioItem("yUnit", "None", "yUnitSystem", "none")
-      
+
     ]
   });
   var yAxisSideMenu = new Ext.menu.Menu({
@@ -1050,7 +1203,7 @@ function createOptionsMenu() {
 
   var yAxisLeftMenu = new Ext.menu.Menu({
     items: [
-      menuInputItem("Left Y Label", "vtitle"),
+      menuInputItem("Left Y Label", "vtitle", "Left Y Label", /^$/),
       menuInputItem("Left Y Minimum", "yMinLeft"),
       menuInputItem("Left Y Maximum", "yMaxLeft"),
       menuInputItem("Left Y Limit", "yLimitLeft"),
@@ -1058,12 +1211,12 @@ function createOptionsMenu() {
       menuInputItem("Left Line Width", "leftWidth"),
       menuInputItem("Left Line Color", "leftColor"),
       menuInputItem("Left Line Dashed (length, in px)", "leftDashed")
-    
+
     ]
   });
   var yAxisRightMenu = new Ext.menu.Menu({
     items: [
-      menuInputItem("Right Y Label", "vtitleRight"),
+      menuInputItem("Right Y Label", "vtitleRight", "Right Y Label", /^$/),
       menuInputItem("Right Y Minimum", "yMinRight"),
       menuInputItem("Right Y Maximum", "yMaxRight"),
       menuInputItem("Right Y Limit", "yLimitRight"),
@@ -1071,7 +1224,7 @@ function createOptionsMenu() {
       menuInputItem("Right Line Width", "rightWidth"),
       menuInputItem("Right Line Color", "rightColor"),
       menuInputItem("Right Line Dashed (length, in px)", "rightDashed")
-    
+
     ]
   });
 
@@ -1084,11 +1237,13 @@ function createOptionsMenu() {
 
   var yAxisMenu = new Ext.menu.Menu({
     items: [
-      menuInputItem("Label", "vtitle"),
+      menuInputItem("Label", "vtitle", "Y-Axis Label", /^$/),
       menuInputItem("Minimum", "yMin"),
       menuInputItem("Maximum", "yMax"),
       menuInputItem("Minor Lines", "minorY", "Enter the number of minor lines to draw", /^[a-zA-Z]/),
       menuInputItem("Logarithmic Scale", "logBase", "Enter the logarithmic base to use (ie. 10, e, etc...)"),
+      menuInputItem("Step", "yStep", "Enter the Y-axis step to use (e.g. 0.2)"),
+      menuInputItem("Divisors", "yDivisors", "Enter the target number of intermediate Y-axis values (e.g. 4,5,6)", /^[a-zA-Z]/),
       {text: "Unit", menu: yAxisUnitMenu},
       {text: "Side", menu: yAxisSideMenu},
       {text: "Dual Y-Axis Options", menu: SecondYAxisMenu},
@@ -1099,8 +1254,8 @@ function createOptionsMenu() {
   var xAxisMenu = new Ext.menu.Menu({
     items: [
       menuInputItem("Time Format", "xFormat", "Enter the time format (see Python's datetime.strftime())", /^$/),
-      menuInputItem("Timezone", "tz", "Enter the timezone to display (e.g. UTC or America/Chicago)"),
-      menuInputItem("Point-width Consolidation Threshold", "minXStep", "Enter the closest number of pixels between points before consolidation"),
+      menuInputItem("Timezone", "tz", "Enter the timezone to display (e.g. UTC or America/Chicago)", /^$/),
+      menuInputItem("Point-width Consolidation Threshold", "minXStep", "Enter the closest number of pixels between points before consolidation")
     ]
   });
 
@@ -1118,6 +1273,7 @@ function createOptionsMenu() {
         menuRadioItem("line", "Slope Line (default)", "lineMode", ""),
         menuRadioItem("line", "Staircase Line", "lineMode", "staircase"),
         menuRadioItem("line", "Connected Line", "lineMode", "connected"),
+        menuInputItem("Connected Line Limit", "connectedLimit", "The number of consecutive None values to jump over when in connected line mode. (default: no limit, leave empty)"),
         menuCheckItem("Draw Null as Zero", "drawNullAsZero")
     ]
   });
@@ -1128,7 +1284,7 @@ function createOptionsMenu() {
       menuRadioItem("fontFace", "Times", "fontName", "Times"),
       menuRadioItem("fontFace", "Courier", "fontName", "Courier"),
       menuRadioItem("fontFace", "Helvetica", "fontName", "Helvetica")
-    ] 
+    ]
   });
 
   var fontMenu = new Ext.menu.Menu({
@@ -1139,7 +1295,7 @@ function createOptionsMenu() {
         menu: {
           items: [
             menuCheckItem("Italics", "fontItalic"),
-            menuCheckItem("Bold", "fontBold"),
+            menuCheckItem("Bold", "fontBold")
           ]
         }
       },
@@ -1179,7 +1335,7 @@ function createOptionsMenu() {
       menuCheckItem("Hide Axes", "hideAxes"),
       menuCheckItem("Hide Y-Axis", "hideYAxis"),
       menuCheckItem("Hide Grid", "hideGrid"),
-      menuInputItem("Apply Template", "template", "Enter the name of a template defined in graphTemplates.conf", /^$/),
+      menuInputItem("Apply Template", "template", "Enter the name of a template defined in graphTemplates.conf", /^$/)
     ]
   });
 
@@ -1236,7 +1392,7 @@ function menuHelpItem(name, message) {
 function paramPrompt(question, param, regexp) {
 
   if(regexp == null) {
-    regexp = /[^A-Za-z0-9_.]/;
+    regexp = /[^A-Za-z0-9_.\-]/;
   }
 
   return function (menuItem, e) {
@@ -1253,7 +1409,7 @@ function paramPrompt(question, param, regexp) {
           Ext.Msg.alert("Input cannot end in a period.");
           return;
         }
-        
+
         setParam(param, value);
         updateGraph();
       },
@@ -1297,7 +1453,7 @@ function menuCheckItem(name, param, paramValue) {
 
 function menuRadioItem(groupName, name, param, paramValue ) {
   var selectItem = new Ext.menu.CheckItem({text: name, param: param, hideOnClick: false, group: groupName, checked: (paramValue ? false : true)});
-  selectItem.on('checkchange', 
+  selectItem.on('checkchange',
     function( item, clicked ) {
       if( paramValue ) {
         setParam(param, paramValue);

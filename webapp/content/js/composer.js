@@ -24,9 +24,14 @@ function GraphiteComposer () {
 }
 
 GraphiteComposer.prototype = {
-  toggleTarget: function (target) {
+  toggleTargetWithoutUpdate: function(target) {
+   this.toggleTarget(target, false); 
+  },
+
+  toggleTarget: function (target, updateImage) {
     /* Add the given target to the graph if it does not exist,
-     * otherwise remove it. */
+     * otherwise remove it. 
+     * Optionally reload the image. (default = do update) */
     var record = getTargetRecord(target);
 
     if (record) {
@@ -35,7 +40,11 @@ GraphiteComposer.prototype = {
       addTarget(target);
     }
     this.syncTargetList();
-    this.updateImage();
+
+    // If the updateImage parameter is unspecified or true, reload the image.
+    if(undefined == updateImage || true == updateImage) {
+      this.updateImage();
+    }
   },
 
   loadMyGraph: function (name, url) {
@@ -50,8 +59,12 @@ GraphiteComposer.prototype = {
     tempUrl.copyQueryStringFromURL(url);
     var targets = tempUrl.getParamList('target');
     tempUrl.removeParam('target');
-    this.url.copyQueryStringFromURL(tempUrl.queryString);
-    Ext.each(targets, this.toggleTarget, this);
+    this.url.setQueryString(tempUrl.queryString);
+
+    /* Use ...WithoutUpdate here to avoid loading the image too soon. If
+     * there are lots of targets, each modification would cause an extra
+     * render. */
+    Ext.each(targets, this.toggleTargetWithoutUpdate, this);
 
     // Fit the image into the window
     this.url.setParam('width', this.window.getInnerWidth());
@@ -205,7 +218,7 @@ ParameterizedURL.prototype = {
 
   setQueryString: function (qs) {
     /* Use the given query string (and update this.params to match) */
-    this.queryString = qs.replace(/%/,"%25").replace(/#/,"%23");
+    this.queryString = qs
     this.syncParams();
     this.syncQueryString();
   },

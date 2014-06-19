@@ -662,6 +662,12 @@ max
 .. deprecated:: 0.9.0
    See yMax_
 
+maxDataPoints
+-------------
+Set the maximum numbers of datapoints returned when using json content. 
+
+If the number of datapoints in a selected range exceeds the maxDataPoints value then the datapoints over the whole
+period are consolidated.
 
 minorGridLineColor
 ------------------
@@ -851,6 +857,14 @@ yAxisSide
 *Default: left*
 
 Sets the side of the graph on which to render the Y-axis. Accepts values of ``left`` or ``right``
+
+yDivisor
+--------
+*Default: 4,5,6*
+
+Supplies the preferred number of intermediate values for the Y-axis to display (Y values between
+the min and max). Note that Graphite will ultimately choose what values (and how many) to display
+based on a set of 'pretty' values. To explicitly set the Y-axis values, see `yStep`_
 
 yLimit
 ------

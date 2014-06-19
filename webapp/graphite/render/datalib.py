@@ -19,6 +19,7 @@ from django.conf import settings
 from graphite.logger import log
 from graphite.storage import STORE, LOCAL_STORE
 from graphite.render.hashing import ConsistentHashRing
+from graphite.util import unpickle
 
 try:
   import cPickle as pickle
@@ -73,6 +74,10 @@ class TimeSeries(list):
       return sum(usable)
     if self.consolidationFunc == 'average':
       return float(sum(usable)) / len(usable)
+    if self.consolidationFunc == 'max':
+      return max(usable)
+    if self.consolidationFunc == 'min':
+      return min(usable)
     raise Exception, "Invalid consolidation function!"
 
 
@@ -173,7 +178,7 @@ class CarbonLinkPool:
     len_prefix = recv_exactly(conn, 4)
     body_size = struct.unpack("!L", len_prefix)[0]
     body = recv_exactly(conn, body_size)
-    return pickle.loads(body)
+    return unpickle.loads(body)
 
 
 # Utilities
@@ -213,6 +218,7 @@ def fetchData(requestContext, pathExpr):
   seriesList = []
   startTime = requestContext['startTime']
   endTime = requestContext['endTime']
+  now = requestContext['now']
 
   if requestContext['localOnly']:
     store = LOCAL_STORE
@@ -221,13 +227,15 @@ def fetchData(requestContext, pathExpr):
 
   for dbFile in store.find(pathExpr):
     log.metric_access(dbFile.metric_path)
-    dbResults = dbFile.fetch( timestamp(startTime), timestamp(endTime) )
-    try:
-      cachedResults = CarbonLink.query(dbFile.real_metric)
-      results = mergeResults(dbResults, cachedResults)
-    except:
-      log.exception()
-      results = dbResults
+    dbResults = dbFile.fetch( timestamp(startTime), timestamp(endTime), timestamp(now))
+    results = dbResults
+
+    if dbFile.isLocal():
+      try:
+        cachedResults = CarbonLink.query(dbFile.real_metric)
+        results = mergeResults(dbResults, cachedResults)
+      except:
+        log.exception("Failed CarbonLink query '%s'" % dbFile.real_metric)
 
     if not results:
       continue
