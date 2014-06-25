@@ -103,9 +103,14 @@ class RemoteNode:
     self.__isLeaf = isLeaf
 
 
-  def fetch(self, startTime, endTime):
+  def fetch(self, startTime, endTime, now=None):
     if not self.__isLeaf:
       return []
+
+    if now is None:
+      now = int( time.time() )
+    if endTime is None:
+      endTime = now
 
     query_params = [
       ('target', self.metric_path),
