@@ -38,7 +38,7 @@ def parseATTime(s, tzinfo=None, now=None):
     else:
       return datetime.fromtimestamp(int(s),tzinfo)
   elif ':' in s:
-    return datetime.strptime(s,'%H:%M%Y%m%d').replace(tzinfo=tzinfo)
+    return tzinfo.localize(datetime.strptime(s,'%H:%M%Y%m%d'), daylight)
   if '+' in s:
     ref,offset = s.split('+',1)
     offset = '+' + offset
