@@ -67,12 +67,10 @@ function createComposerWindow(myComposer) {
     { text: 'Clear', handler: function() {Composer.loadURL('');}},
     '-',
     { text: 'Date Range...', handler: toggleWindow(createCalendarWindow)},
-    { text: 'Graphplot', handler: function() { window.open('/graphlot/?' + Composer.url.queryString,'_blank') }},
+    { text: 'Graphlot', handler: function() { window.open('/graphlot/?' + Composer.url.queryString,'_blank') }},
     '-',
     quantityField, unitSelector,
-    timeDisplay,
-    '->',    
-    createToolbarButton('Open in GraphPlot', 'line_chart.png', function() { window.open('/graphlot/?' + Composer.url.queryString,'_blank') })
+    timeDisplay
   ];
   if (GraphiteConfig.showMyGraphs) {
     var saveButton = createToolbarButton('Save to My Graphs', 'save.gif', saveMyGraph);
