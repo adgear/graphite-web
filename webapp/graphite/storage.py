@@ -25,6 +25,13 @@ except ImportError:
 
 DATASOURCE_DELIMETER = '::RRD_DATASOURCE::'
 
+#
+# Datacratic local
+#
+#   Apply whisper fetch strategy
+if hasattr(whisper, 'FETCH_STRATEGY'):
+  whisper.FETCH_STRATEGY = WHISPER_FETCH_STRATEGY
+  whisper.FETCH_STRATEGY_COARSE_THRESHOLD = WHISPER_FETCH_STRATEGY_COARSE_THRESHOLD
 
 
 class Store:
