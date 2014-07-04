@@ -126,6 +126,13 @@ DATABASES = {
 # If using rrdcached, set to the address or socket of the daemon
 FLUSHRRDCACHED = ''
 
+
+#
+# Datacratic local
+#
+WHISPER_FETCH_STRATEGY = None
+WHISPER_FETCH_STRATEGY_COARSE_THRESHOLD = float("inf")
+
 ## Load our local_settings
 try:
   from graphite.local_settings import *
