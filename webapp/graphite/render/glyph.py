@@ -1017,6 +1017,8 @@ class LineGraph(Graph):
 
     if self.areaMode == 'stacked':
       length = safeMin( [len(series) for series in self.data if not series.options.get('drawAsInfinite')] )
+      if length is None:
+        length = 0
       sumSeries = []
 
       for i in xrange(0, length):
