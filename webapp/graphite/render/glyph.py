@@ -1650,6 +1650,9 @@ def safePercentile(args, pct=0.98, cutoff=0.2):
   args = sorted([arg for arg in args if arg not in (None, INFINITY)])
   if args:
     maxArg = args[-1]
+    if maxArg == 0:
+        return 0
+
     pctArg = args[int(math.ceil(pct*len(args)))-1]
     if (maxArg-pctArg / maxArg) < cutoff:
         return maxArg
