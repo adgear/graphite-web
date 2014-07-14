@@ -31,6 +31,13 @@ def parseATTime(s, tzinfo=None, now=None):
   if now is None:
     now = datetime.now(tz=tzinfo)
 
+  if s[-1] == "Z": #datacratic assumes this is an ISO8601 UTC datetime
+    try:
+      res = pytz.utc.localize(datetime.strptime(s, "%Y-%m-%dT%H:%M:%SZ"))
+      return res.astimezone(tzinfo)
+    except:
+      pass
+
   s = s.strip().lower().replace('_','').replace(',','').replace(' ','')
   if s.isdigit():
     if len(s) == 8 and int(s[:4]) > 1900 and int(s[4:6]) < 13 and int(s[6:]) < 32:
