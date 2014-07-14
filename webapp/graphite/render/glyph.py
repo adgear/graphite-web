@@ -1023,9 +1023,9 @@ class LineGraph(Graph):
 
       for i in xrange(0, length):
         sumSeries.append( safeSum( [series[i] for series in self.data if not series.options.get('drawAsInfinite')] ) )
-      yMaxValue = safeMax( sumSeries )
+      yMaxValue = safePercentile( sumSeries )
     else:
-      yMaxValue = safeMax( [safeMax(series) for series in self.data if not series.options.get('drawAsInfinite')] )
+      yMaxValue = safeMax( [safePercentile(series) for series in self.data if not series.options.get('drawAsInfinite')] )
 
     if yMinValue is None:
       yMinValue = 0.0
@@ -1172,11 +1172,11 @@ class LineGraph(Graph):
       yMinValueR = safeMin( [safeMin(series) for series in Rdata if not series.options.get('drawAsInfinite')] )
 
     if self.areaMode == 'stacked':
-      yMaxValueL = safeSum( [safeMax(series) for series in Ldata] )
-      yMaxValueR = safeSum( [safeMax(series) for series in Rdata] )
+      yMaxValueL = safeSum( [safePercentile(series) for series in Ldata] )
+      yMaxValueR = safeSum( [safePercentile(series) for series in Rdata] )
     else:
-      yMaxValueL = safeMax( [safeMax(series) for series in Ldata] )
-      yMaxValueR = safeMax( [safeMax(series) for series in Rdata] )
+      yMaxValueL = safeMax( [safePercentile(series) for series in Ldata] )
+      yMaxValueR = safeMax( [safePercentile(series) for series in Rdata] )
 
     if yMinValueL is None:
       yMinValueL = 0.0
@@ -1645,6 +1645,16 @@ def safeMax(args):
   if args:
     return max(args)
 
+
+def safePercentile(args, pct=0.95):
+  args = sorted([arg for arg in args if arg not in (None, INFINITY)])
+  if args:
+    maxArg = args[-1]
+    pctArg = args[int(math.ceil(pct*len(args)))-1]
+    if (maxArg-pctArg / maxArg) < 0.1:
+        return maxArg
+    else:
+        return pctArg
 
 def safeSum(values):
   return sum([v for v in values if v not in (None, INFINITY)])
