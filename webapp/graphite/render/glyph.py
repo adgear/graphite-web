@@ -1646,7 +1646,7 @@ def safeMax(args):
     return max(args)
 
 
-def safePercentile(args, pct=0.95, cutoff=0.2):
+def safePercentile(args, pct=0.98, cutoff=0.2):
   args = sorted([arg for arg in args if arg not in (None, INFINITY)])
   if args:
     maxArg = args[-1]
@@ -1654,7 +1654,7 @@ def safePercentile(args, pct=0.95, cutoff=0.2):
     if (maxArg-pctArg / maxArg) < cutoff:
         return maxArg
     else:
-        return pctArg
+        return pctArg*1.2
 
 def safeSum(values):
   return sum([v for v in values if v not in (None, INFINITY)])
