@@ -114,7 +114,7 @@ class RemoteNode:
       ('until', str( int(endTime) ))
     ]
     if now is not None:
-      query_params['now'] = str( int(now) )
+      query_params.append(('now', str( int(now) )))
     query_string = urlencode(query_params)
 
     connection = HTTPConnectionWithTimeout(self.store.host)
