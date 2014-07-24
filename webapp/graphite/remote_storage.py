@@ -83,6 +83,9 @@ class FindRequest:
         raise
       else:
         results = []
+    finally:
+      self.connection.close()
+      self.connection = None
 
     resultNodes = [ RemoteNode(self.store, node['metric_path'], node['isLeaf']) for node in results ]
     cache.set(self.cacheKey, resultNodes, settings.REMOTE_FIND_CACHE_DURATION)
