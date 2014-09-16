@@ -21,9 +21,6 @@ from graphite.storage import STORE, LOCAL_STORE
 from graphite.render.hashing import ConsistentHashRing
 from graphite.util import unpickle
 
-# datacratic local
-from multiprocessing.pool import ThreadPool
-
 try:
   import cPickle as pickle
 except ImportError:
@@ -216,14 +213,6 @@ for host in settings.CARBONLINK_HOSTS:
 CarbonLink = CarbonLinkPool(hosts, settings.CARBONLINK_TIMEOUT)
 
 
-if settings.REMOTE_STORE_USE_THREADS:
-  threadpool = ThreadPool(settings.REMOTE_STORE_THREADPOOL_SIZE)
-
-def _dbFileFetch( (dbFile, startTime, endTime, now) ):
-  log.metric_access(dbFile.metric_path)
-  dbResults = dbFile.fetch( timestamp(startTime), timestamp(endTime), timestamp(now))
-  return (dbFile, dbResults)
-  
 # Data retrieval API
 def fetchData(requestContext, pathExpr):
   seriesList = []
@@ -236,14 +225,9 @@ def fetchData(requestContext, pathExpr):
   else:
     store = STORE
 
-  dbFiles = store.find(pathExpr)
-  dbFileFetchTuples = [ (dbFile, startTime, endTime, now) for dbFile in dbFiles ]
-  if settings.REMOTE_STORE_USE_THREADS:
-    dbFilesResults = threadpool.map(_dbFileFetch, dbFileFetchTuples)
-  else:
-    dbFilesResults = map(_dbFileFetch, dbFileFetchTuples)
-
-  for (dbFile, dbResults) in dbFilesResults:
+  for dbFile in store.find(pathExpr):
+    log.metric_access(dbFile.metric_path)
+    dbResults = dbFile.fetch( timestamp(startTime), timestamp(endTime), timestamp(now))
     results = dbResults
 
     if dbFile.isLocal():
