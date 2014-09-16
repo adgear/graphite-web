@@ -21,6 +21,9 @@ from graphite.storage import STORE, LOCAL_STORE
 from graphite.render.hashing import ConsistentHashRing
 from graphite.util import unpickle
 
+# datacratic local
+from multiprocessing.pool import ThreadPool
+
 try:
   import cPickle as pickle
 except ImportError:
@@ -248,6 +251,13 @@ for host in settings.CARBONLINK_HOSTS:
 #A shared importable singleton
 CarbonLink = CarbonLinkPool(hosts, settings.CARBONLINK_TIMEOUT)
 
+if settings.REMOTE_STORE_USE_THREADS:
+  threadpool = ThreadPool(settings.REMOTE_STORE_THREADPOOL_SIZE)
+
+def _dbFileFetch( (dbFile, startTime, endTime, now) ):
+  log.metric_access(dbFile.metric_path)
+  dbResults = dbFile.fetch( timestamp(startTime), timestamp(endTime), timestamp(now))
+  return (dbFile, dbResults)
 
 # Data retrieval API
 def fetchData(requestContext, pathExpr):
@@ -262,14 +272,17 @@ def fetchData(requestContext, pathExpr):
     store = STORE
 
   dbFiles = [dbFile for dbFile in store.find(pathExpr)]
+  dbFileFetchTuples = [ (dbFile, startTime, endTime, now) for dbFile in dbFiles ]
 
   if settings.CARBONLINK_QUERY_BULK:
     cacheResultsByMetric = CarbonLink.query_bulk([dbFile.real_metric for dbFile in dbFiles])
 
-  for dbFile in dbFiles:
-    log.metric_access(dbFile.metric_path)
-    dbResults = dbFile.fetch( timestamp(startTime), timestamp(endTime), timestamp(now))
+  if settings.REMOTE_STORE_USE_THREADS:
+    dbFilesResults = threadpool.map(_dbFileFetch, dbFileFetchTuples)
+  else:
+    dbFilesResults = map(_dbFileFetch, dbFileFetchTuples)
 
+  for (dbFile, dbResults) in dbFilesResults:
     if dbFile.isLocal():
       try:
         if settings.CARBONLINK_QUERY_BULK:
