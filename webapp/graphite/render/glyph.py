@@ -12,7 +12,13 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License."""
 
-import os, cairo, math, itertools, re
+import os, math, itertools, re
+
+try:
+    import cairo
+except ImportError:
+    import cairocffi as cairo
+
 import StringIO
 from datetime import datetime, timedelta
 from urllib import unquote_plus
@@ -152,7 +158,7 @@ class Graph:
     if self.logBase:
       if self.logBase == 'e':
         self.logBase = math.e
-      elif self.logBase <= 0:
+      elif self.logBase < 1:
         self.logBase = None
         params['logBase'] = None
       else:
@@ -1009,23 +1015,23 @@ class LineGraph(Graph):
 
   def setupYAxis(self):
     seriesWithMissingValues = [ series for series in self.data if None in series ]
+    finite_series = filter(
+      lambda x: not x.options.get('drawAsInfinite'),
+      self.data
+    )
 
     if self.params.get('drawNullAsZero') and seriesWithMissingValues:
       yMinValue = 0.0
     else:
-      yMinValue = safeMin( [safeMin(series) for series in self.data if not series.options.get('drawAsInfinite')] )
+      yMinValue = safeMin(map(safeMin, finite_series))
 
     if self.areaMode == 'stacked':
-      length = safeMin( [len(series) for series in self.data if not series.options.get('drawAsInfinite')] )
-      if length is None:
-        length = 0
-      sumSeries = []
-
-      for i in xrange(0, length):
-        sumSeries.append( safeSum( [series[i] for series in self.data if not series.options.get('drawAsInfinite')] ) )
-      yMaxValue = safePercentile( sumSeries )
+      # Use izip to use iteration on the TimeSeries objects so we honor
+      # consolidation. (izip will stop at the end of the shortest input, so
+      # this behavior is backwards compatible with earlier code.)
+      yMaxValue = safePercentile(map(safeSum, itertools.izip(*finite_series)))
     else:
-      yMaxValue = safeMax( [safePercentile(series) for series in self.data if not series.options.get('drawAsInfinite')] )
+      yMaxValue = safePercentile(map(safeMax, finite_series))
 
     if yMinValue is None:
       yMinValue = 0.0
@@ -1416,8 +1422,6 @@ class LineGraph(Graph):
       labels = self.yLabelValuesL
     else:
       labels = self.yLabelValues
-    if self.logBase:
-      labels.append(self.logBase * max(labels))
 
     for i, value in enumerate(labels):
       self.ctx.set_line_width(1.2)

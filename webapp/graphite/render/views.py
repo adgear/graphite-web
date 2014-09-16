@@ -114,8 +114,8 @@ def renderView(request):
         log.rendering("Retrieval of %s took %.6f" % (target, time() - t))
         data.extend(seriesList)
 
-    if useCache:
-      cache.set(dataKey, data, cacheTimeout)
+      if useCache:
+        cache.add(dataKey, data, cacheTimeout)
 
     format = requestOptions.get('format')
     if format == 'csv':
@@ -149,14 +149,14 @@ def renderView(request):
             for r in range(1, valuesToLose):
               del series[0]
             series.consolidate(valuesPerPoint)
-            timestamps = range(series.start, series.end, secondsPerPoint)
+            timestamps = range(int(series.start), int(series.end) + 1, int(secondsPerPoint))
           else:
-            timestamps = range(series.start, series.end, series.step)
+            timestamps = range(int(series.start), int(series.end) + 1, int(series.step))
           datapoints = zip(series, timestamps)
           series_data.append(dict(target=series.name, datapoints=datapoints))
       else:
         for series in data:
-          timestamps = range(series.start, series.end, series.step)
+          timestamps = range(int(series.start), int(series.end) + 1, int(series.step))
           datapoints = zip(series, timestamps)
           series_data.append( dict(target=series.name, datapoints=datapoints) )
 
@@ -209,7 +209,7 @@ def renderView(request):
     response = buildResponse(image, useSVG and 'image/svg+xml' or 'image/png')
 
   if useCache:
-    cache.set(requestKey, response, cacheTimeout)
+    cache.add(requestKey, response, cacheTimeout)
 
   log.rendering('Total rendering time %.6f seconds' % (time() - start))
   return response

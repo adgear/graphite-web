@@ -63,18 +63,20 @@ function createComposerWindow(myComposer) {
     '-',
     { text: "Options", menu: createOptionsMenu() },
     { text: "Data", handler: toggleWindow(GraphDataWindow.create.createDelegate(GraphDataWindow)) },
-    { text: 'Refresh', handler: updateGraph},
     { text: 'Clear', handler: function() {Composer.loadURL('');}},
     '-',
-    { text: 'Date Range...', handler: toggleWindow(createCalendarWindow)},
-    { text: 'Graphlot', handler: function() { window.open('/graphlot/?' + Composer.url.queryString,'_blank') }},
+    createToolbarButton('Update Graph', 'refresh.png', updateGraph),
+    createToolbarButton('Select a Date Range', 'calendar.png', toggleWindow(createCalendarWindow) ),
+    createToolbarButton('Select Recent Data', 'clock.png', toggleWindow(createRecentWindow) ),
+    createToolbarButton('Create from URL', 'upload.png', toggleWindow(createURLWindow) ),
+    createToolbarButton('Short URL', 'share.png', showShortUrl),
     '-',
     quantityField, unitSelector,
     timeDisplay
   ];
   if (GraphiteConfig.showMyGraphs) {
-    var saveButton = createToolbarButton('Save to My Graphs', 'save.gif', saveMyGraph);
-    var deleteButton = createToolbarButton('Delete from My Graphs', 'delete.gif', deleteMyGraph);
+    var saveButton = createToolbarButton('Save to My Graphs', 'save.png', saveMyGraph);
+    var deleteButton = createToolbarButton('Delete from My Graphs', 'trash.png', deleteMyGraph);
     topToolbar.splice(0, 0, saveButton, deleteButton);
   }
 
@@ -164,7 +166,7 @@ function fitImageToWindow(win) {
 /* Toolbar stuff */
 function createToolbarButton(tip, icon, handler) {
   return new Ext.Toolbar.Button({
-    style: "padding-left:10pt; background:transparent url(../content/img/" + icon + ") no-repeat scroll 0% 50%",
+    style: "margin: 0 5px; background:transparent url(../content/img/" + icon + ") no-repeat scroll 0% 50%",
     handler: handler,
     handleMouseEvents: false,
     text: "&nbsp; &nbsp;",
@@ -275,6 +277,48 @@ function getCalendarSelection(which) {
 
 function asDateString(dateObj) {
   return dateObj.format('H:i_Ymd');
+}
+
+/* Short url window */
+function showShortUrl() {
+    showUrl = function(options, success, response) {
+        if(success) {
+            var win = new Ext.Window({
+              title: "Graph URL",
+              width: 600,
+              height: 125,
+              layout: 'border',
+              modal: true,
+              items: [
+                {
+                  xtype: "label",
+                  region: 'north',
+                  style: "text-align: center;",
+                  text: "Short Direct URL to this graph"
+                }, {
+                  xtype: 'textfield',
+                  region: 'center',
+                  value:  window.location.origin + response.responseText,
+                  editable: false,
+                  style: "text-align: center; font-size: large;",
+                  listeners: {
+                    focus: function (field) { field.selectText(); }
+                  }
+                }
+              ],
+              buttonAlign: 'center',
+              buttons: [
+                {text: "Close", handler: function () { win.close(); } }
+              ]
+            });
+            win.show();
+        }
+    }
+    Ext.Ajax.request({
+        method: 'GET',
+        url: '/s/render/?' + Composer.url.queryString,
+        callback: showUrl,
+    });
 }
 
 /* "Recent Data" dialog */
@@ -401,7 +445,7 @@ function saveMyGraph(button, e) {
 
       //Save the name for future use and re-load the "My Graphs" tree
       Composer.state.myGraphName = text;
-      Browser.trees.mygraphs.reload();
+
       //Send the request
       Ext.Ajax.request({
         method: 'GET',
@@ -419,6 +463,7 @@ function saveMyGraph(button, e) {
 function handleSaveMyGraphResponse(options, success, response) {
   var message;
   if (success) {
+    Browser.trees.mygraphs.reload();
     message = "Graph saved successfully";
   } else {
     message = "There was an error saving your Graph, please try again later.";
@@ -446,15 +491,19 @@ function deleteMyGraph() {
 	return;
       }
 
-      Browser.trees.mygraphs.reload();
       //Send the request
       Ext.Ajax.request({
         method: 'GET',
         url: '../composer/mygraph/',
         params: {action: 'delete', graphName: text},
         callback: function (options, success, response) {
-          var message = success ? "Graph deleted successfully" : "There was an error performing the operation.";
-
+          var message;
+          if (success) {
+            Browser.trees.mygraphs.reload();
+            message = "Graph deleted successfully";
+          } else {
+            message = "There was an error performing the operation.";
+          }
           Ext.Msg.show({
             title: 'Delete My Graph',
             msg: message,
@@ -1111,6 +1160,7 @@ function createFunctionsMenu() {
         {text: 'Maximum Value Above', handler: applyFuncToEachWithInput('maximumAbove', 'Draw all metrics whose maximum value is above ___')},
         {text: 'Maximum Value Below', handler: applyFuncToEachWithInput('maximumBelow', 'Draw all metrics whose maximum value is below ___')},
         {text: 'Minimum Value Above', handler: applyFuncToEachWithInput('minimumAbove', 'Draw all metrics whose minimum value is above ___')},
+        {text: 'Minimum Value Below', handler: applyFuncToEachWithInput('minimumBelow', 'Draw all metrics whose minimum value is below ___')},
         {text: 'sortByMaxima', handler: applyFuncToEach('sortByMaxima')},
         {text: 'sortByMinima', handler: applyFuncToEach('sortByMinima')},
         {text: 'limit', handler: applyFuncToEachWithInput('limit', 'Limit to first ___ of a list of metrics')},
@@ -1143,6 +1193,7 @@ function createFunctionsMenu() {
         {text: 'Line Width', handler: applyFuncToEachWithInput('lineWidth', 'Please enter a line width for this graph target')},
         {text: 'Dashed Line', handler: applyFuncToEach('dashed')},
         {text: 'Keep Last Value', handler: applyFuncToEachWithInput('keepLastValue', 'Please enter the maximum number of "None" datapoints to overwrite, or leave empty for no limit. (default: empty)', {allowBlank: true})},
+        {text: 'Changed', handler: applyFuncToEach('changed')},
         {text: 'Transform Nulls', handler: applyFuncToEachWithInput('transformNull', 'Please enter the value to transform null values to')},
         {text: 'Substring', handler: applyFuncToEachWithInput('substr', 'Enter a starting position')},
         {text: 'Group', handler: applyFuncToAll('group')},
@@ -1329,6 +1380,7 @@ function createOptionsMenu() {
         }
       },
       menuInputItem("Line Thickness", "lineWidth", "Enter the line thickness in pixels"),
+      menuInputItem("Margin", "margin", "Enter the margin width in pixels"),
       menuCheckItem("Graph Only", "graphOnly"),
       menuCheckItem("Hide Axes", "hideAxes"),
       menuCheckItem("Hide Y-Axis", "hideYAxis"),
