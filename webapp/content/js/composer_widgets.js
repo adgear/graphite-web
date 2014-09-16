@@ -60,16 +60,16 @@ function createComposerWindow(myComposer) {
 
   var topToolbar = [
     { text: "Auto-Refresh", id: 'autorefresh_button', enableToggle: true, toggleHandler: toggleAutoRefresh },
+    createToolbarButton('Update Graph', 'refresh.png', updateGraph),
     '-',
     { text: "Options", menu: createOptionsMenu() },
     { text: "Data", handler: toggleWindow(GraphDataWindow.create.createDelegate(GraphDataWindow)) },
     { text: 'Clear', handler: function() {Composer.loadURL('');}},
     '-',
-    createToolbarButton('Update Graph', 'refresh.png', updateGraph),
     createToolbarButton('Select a Date Range', 'calendar.png', toggleWindow(createCalendarWindow) ),
-    createToolbarButton('Select Recent Data', 'clock.png', toggleWindow(createRecentWindow) ),
-    createToolbarButton('Create from URL', 'upload.png', toggleWindow(createURLWindow) ),
-    createToolbarButton('Short URL', 'share.png', showShortUrl),
+    // createToolbarButton('Select Recent Data', 'clock.png', toggleWindow(createRecentWindow) ),
+    // createToolbarButton('Create from URL', 'upload.png', toggleWindow(createURLWindow) ),
+    // createToolbarButton('Short URL', 'share.png', showShortUrl),
     '-',
     quantityField, unitSelector,
     timeDisplay
