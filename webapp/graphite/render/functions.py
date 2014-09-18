@@ -2887,6 +2887,61 @@ def nm2(requestContext, seriesList):
 def smooth(requestContext, seriesList):
   return movingAverage(requestContext, seriesList, 25)
 
+def movingAverageSlow(requestContext, seriesList, windowSize):
+  """
+  Graphs the moving average of a metric (or metrics) over a fixed number of
+  past points, or a time interval.
+
+  Takes one metric or a wildcard seriesList followed by a number N of datapoints
+  or a quoted string with a length of time like '1hour' or '5min' (See ``from /
+  until`` in the render\_api_ for examples of time formats). Graphs the
+  average of the preceeding datapoints for each point on the graph. All
+  previous datapoints are set to None at the beginning of the graph.
+
+  Example:
+
+  .. code-block:: none
+
+    &target=movingAverage(Server.instance01.threads.busy,10)
+    &target=movingAverage(Server.instance*.threads.idle,'5min')
+
+  """
+  windowInterval = None
+  if type(windowSize) is str:
+    delta = parseTimeOffset(windowSize)
+    windowInterval = abs(delta.seconds + (delta.days * 86400))
+
+  if windowInterval:
+    bootstrapSeconds = windowInterval
+  else:
+    bootstrapSeconds = max([s.step for s in seriesList]) * int(windowSize)
+
+  bootstrapList = _fetchWithBootstrap(requestContext, seriesList, seconds=bootstrapSeconds)
+  result = []
+
+  for bootstrap, series in zip(bootstrapList, seriesList):
+    if windowInterval:
+      windowPoints = windowInterval / series.step
+    else:
+      windowPoints = int(windowSize)
+
+    if type(windowSize) is str:
+      newName = 'movingAverage(%s,"%s")' % (series.name, windowSize)
+    else:
+      newName = "movingAverage(%s,%s)" % (series.name, windowSize)
+    newSeries = TimeSeries(newName, series.start, series.end, series.step, [])
+    newSeries.pathExpression = newName
+
+    offset = len(bootstrap) - len(series)
+    for i in range(len(series)):
+      window = bootstrap[i + offset - windowPoints:i + offset]
+      newSeries.append(safeAvg(window))
+
+    result.append(newSeries)
+
+  return result
+
+
 SeriesFunctions = {
   # Datacratic functions
   'nm' : nm, 'nm2': nm2, 'smooth' : smooth,
@@ -2924,6 +2979,7 @@ SeriesFunctions = {
 
   # Calculate functions
   'movingAverage' : movingAverage,
+  'movingAverageSlow' : movingAverageSlow,
   'movingMedian' : movingMedian,
   'stdev' : stdev,
   'holtWintersForecast': holtWintersForecast,
