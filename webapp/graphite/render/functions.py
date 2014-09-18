@@ -770,7 +770,8 @@ def movingAverage(requestContext, seriesList, windowSize):
     for i in range(len(bootstrap)-windowPoints):
       if i == 0:
         initialPoints =  bootstrap[0:windowPoints]
-        numerator = safeSum(initialPoints)
+        _numerator = safeSum(initialPoints)
+        numerator = _numerator if _numerator is not None else 0
         denominator = safeLen(initialPoints)
       else:
         outVal = bootstrap[i - 1]
