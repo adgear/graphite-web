@@ -716,8 +716,14 @@ def movingAverage(requestContext, seriesList, windowSize):
   Takes one metric or a wildcard seriesList followed by a number N of datapoints
   or a quoted string with a length of time like '1hour' or '5min' (See ``from /
   until`` in the render\_api_ for examples of time formats). Graphs the
-  average of the preceeding datapoints for each point on the graph. All
-  previous datapoints are set to None at the beginning of the graph.
+  average of the preceeding datapoints for each point on the graph.
+
+  To cover the average for the first part of the graph, this function re-fetches
+  the datapoints for a period covering the windowSize + requested timespan.
+  Note that if windowSize + requested timspan crosses the whisper retention
+  period of a series, this function will use the coarser data to calculate its
+  output.
+  
 
   Example:
 
@@ -737,12 +743,12 @@ def movingAverage(requestContext, seriesList, windowSize):
   else:
     bootstrapSeconds = max([s.step for s in seriesList]) * int(windowSize)
 
-  bootstrapList = _fetchWithBootstrap(requestContext, seriesList, seconds=bootstrapSeconds)
+  bootstrapList = _fetchWithBootstrapRefetchWholeInterval(requestContext, seriesList, seconds=bootstrapSeconds)
   result = []
 
   for bootstrap, series in zip(bootstrapList, seriesList):
     if windowInterval:
-      windowPoints = windowInterval / series.step
+      windowPoints = windowInterval / bootstrap.step
     else:
       windowPoints = int(windowSize)
 
@@ -750,23 +756,23 @@ def movingAverage(requestContext, seriesList, windowSize):
       newName = 'movingAverage(%s,"%s")' % (series.name, windowSize)
     else:
       newName = "movingAverage(%s,%s)" % (series.name, windowSize)
-    newSeries = TimeSeries(newName, series.start, series.end, series.step, [])
+    # keep the series start+end, but switch to the bootstrap step. it might differ
+    newSeries = TimeSeries(newName, series.start, series.end, bootstrap.step, [])
     newSeries.pathExpression = newName
 
-    offset = len(bootstrap) - len(series)
     numerator = 0
     denominator = 0
-    for i in range(len(series)):
+    for i in range(len(bootstrap)-windowPoints):
       if i == 0:
-        initialPoints =  bootstrap[offset - windowPoints:offset]
+        initialPoints =  bootstrap[0:windowPoints]
         numerator = safeSum(initialPoints)
         denominator = safeLen(initialPoints)
       else:
-        outVal = bootstrap[i - 1 + offset - windowPoints]
+        outVal = bootstrap[i - 1]
         if outVal is not None:
             numerator -= outVal
             denominator -= 1
-        inVal = bootstrap[i - 1 + offset]
+        inVal = bootstrap[i - 1 + windowPoints]
         if inVal is not None:
             numerator += inVal
             denominator += 1
@@ -1853,6 +1859,28 @@ def secondYAxis(requestContext, seriesList):
     series.options['secondYAxis'] = True
     series.name= 'secondYAxis(%s)' % series.name
   return seriesList
+
+
+def _fetchWithBootstrapRefetchWholeInterval(requestContext, seriesList, **delta_kwargs):
+  '''Request the same data but with a bootstrap period at the beginning
+
+  Differs from the version below by fetching the whole interval at once.
+  This may result in fetching a coarser view of the data if the requested period
+  crosses a whisper retention period.
+  '''
+
+  bootstrapContext = requestContext.copy()
+  bootstrapContext['startTime'] = requestContext['startTime'] - timedelta(**delta_kwargs)
+
+  bootstrapList = []
+  for series in seriesList:
+    if series.pathExpression in [ b.pathExpression for b in bootstrapList ]:
+      # This pathExpression returns multiple series and we already fetched it
+      continue
+    bootstraps = evaluateTarget(bootstrapContext, series.pathExpression)
+    bootstrapList.extend(bootstraps)
+
+  return bootstrapList
 
 def _fetchWithBootstrap(requestContext, seriesList, **delta_kwargs):
   'Request the same data but with a bootstrap period at the beginning'
