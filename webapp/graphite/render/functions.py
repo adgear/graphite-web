@@ -741,7 +741,12 @@ def movingAverage(requestContext, seriesList, windowSize):
   if windowInterval:
     bootstrapSeconds = windowInterval
   else:
-    bootstrapSeconds = max([s.step for s in seriesList]) * int(windowSize)
+    try:
+      bootstrapSeconds = max([s.step for s in seriesList]) * int(windowSize)
+    except ValueError:
+      # can happen with invalid/empty seriesList.
+      # XXX maybe this should be handled upstream
+      return []
 
   bootstrapList = _fetchWithBootstrapRefetchWholeInterval(requestContext, seriesList, seconds=bootstrapSeconds)
   result = []
