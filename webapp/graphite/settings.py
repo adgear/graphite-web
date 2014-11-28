@@ -106,6 +106,9 @@ ALLOWED_HOSTS = [ '*' ]
 # Override to link a different URL for login (e.g. for django_openid_auth)
 LOGIN_URL = '/account/login'
 
+# Set the default timezone to UTC
+TIME_ZONE = 'UTC'
+
 #Initialize deprecated database settings
 DATABASE_ENGINE = ''
 DATABASE_NAME = ''
@@ -247,3 +250,5 @@ if USE_LDAP_AUTH:
 
 if SECRET_KEY == 'UNSAFE_DEFAULT':
   warn('SECRET_KEY is set to an unsafe default. This should be set in local_settings.py for better security')
+
+USE_TZ = True

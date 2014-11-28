@@ -14,6 +14,7 @@ limitations under the License."""
 
 import re
 from django.shortcuts import render_to_response
+from django.utils.safestring import mark_safe
 from django.http import HttpResponse
 from django.conf import settings
 from graphite.account.models import Profile
@@ -43,7 +44,7 @@ def header(request):
 def browser(request):
   "View for the top-level frame of the browser UI"
   context = {
-    'queryString' : request.GET.urlencode(),
+    'queryString' : mark_safe(request.GET.urlencode()),
     'target' : request.GET.get('target')
   }
   if context['queryString']:
@@ -77,7 +78,7 @@ def search(request):
 
   index_file.close()
   result_string = ','.join(results)
-  return HttpResponse(result_string, mimetype='text/plain')
+  return HttpResponse(result_string, content_type='text/plain')
 
 
 def myGraphLookup(request):
@@ -256,9 +257,9 @@ def json_response(nodes, request=None):
   #json = str(nodes) #poor man's json encoder for simple types
   json_data = json.dumps(nodes)
   if jsonp:
-    response = HttpResponse("%s(%s)" % (jsonp, json_data),mimetype="text/javascript")
+    response = HttpResponse("%s(%s)" % (jsonp, json_data),content_type="text/javascript")
   else:
-    response = HttpResponse(json_data,mimetype="application/json")
+    response = HttpResponse(json_data,content_type="application/json")
   response['Pragma'] = 'no-cache'
   response['Cache-Control'] = 'no-cache'
   return response
