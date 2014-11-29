@@ -22,6 +22,9 @@ from graphite.remote_storage import RemoteNode
 from graphite.render.hashing import ConsistentHashRing
 from graphite.util import unpickle, epoch
 
+# datacratic local
+from multiprocessing.pool import ThreadPool
+
 try:
   import cPickle as pickle
 except ImportError:
@@ -249,6 +252,8 @@ for host in settings.CARBONLINK_HOSTS:
 #A shared importable singleton
 CarbonLink = CarbonLinkPool(hosts, settings.CARBONLINK_TIMEOUT)
 
+if settings.REMOTE_STORE_USE_THREADS:
+  threadpool = ThreadPool(settings.REMOTE_STORE_THREADPOOL_SIZE)
 
 # Data retrieval API
 def fetchData(requestContext, pathExpr):
@@ -289,9 +294,17 @@ def fetchData(requestContext, pathExpr):
   if not requestContext['localOnly']:
     remote_nodes = [ RemoteNode(store, pathExpr, True) for store in STORE.remote_stores ]
 
-    for node in remote_nodes:
-      results = node.fetch(startTime, endTime, now)
+    def _nodeFetch( (node, startTime, endTime, now) ):
+      r = node.fetch(startTime, endTime, now)
+      return (node, r)
 
+    nodesFetchTuples = [ (node, startTime, endTime, now) for node in remote_nodes ]
+    if settings.REMOTE_STORE_USE_THREADS:
+      nodesFetchResults = threadpool.map(_nodeFetch, nodesFetchTuples)
+    else:
+      nodesFetchResults = map(_nodeFetch, nodesFetchTuples)
+
+    for (node, results) in nodesFetchResults:
       for series in results:
         ts = TimeSeries(series['name'], series['start'], series['end'], series['step'], series['values'])
         ts.pathExpression = pathExpr # hack as above
