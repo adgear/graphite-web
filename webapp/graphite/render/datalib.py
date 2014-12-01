@@ -298,7 +298,13 @@ def prefetchRemoteData(requestContext, pathExpressions):
 
     for series in results:
       # series.pathExpression is original target, ie. containing wildcards
-      k = _prefetchMetricKey(series['pathExpression'], startTime, endTime)
+      # XXX Print a useful error and abort. should be nice to disable further prefetch calls to that backend
+      try:
+        k = _prefetchMetricKey(series['pathExpression'], startTime, endTime)
+      except KeyError:
+        log.exception("Remote node %s doesn't support prefetching data... upgrade!" % node.store.host)
+        raise
+        
       if prefetchedRemoteData[node.store.host][k] is not None:
         # This should not be needed because of above filling with [],
         # but better be safe than sorry
