@@ -102,7 +102,11 @@ class RemoteNode:
     self.fs_path = None
     self.metric_path = metric_path
     self.real_metric = metric_path
-    self.name = metric_path.split('.')[-1]
+    # XXX not nice
+    if isinstance(self.metric_path, list):
+      self.name = "Bulk: %s" % self.metric_path
+    else:
+      self.name = metric_path.split('.')[-1]
     self.__isLeaf = isLeaf
 
 
@@ -112,9 +116,9 @@ class RemoteNode:
 
     # XXX not nice
     if isinstance(self.metric_path, list):
-      targets = [ ('targets', v) for v in self.metric_path ]
+      targets = [ ('target', v) for v in self.metric_path ]
     else:
-      targets = ('target', self.metric_path)
+      targets = [ ('target', self.metric_path) ]
       
     query_params = [
       ('local', '1'),

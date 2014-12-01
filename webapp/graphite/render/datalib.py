@@ -19,7 +19,7 @@ from django.conf import settings
 from graphite.logger import log
 from graphite.storage import STORE, LOCAL_STORE
 from graphite.remote_storage import RemoteNode
-from graphite.render.hashing import ConsistentHashRing, hashData
+from graphite.render.hashing import ConsistentHashRing
 from graphite.util import unpickle, epoch
 
 # datacratic local
@@ -264,8 +264,11 @@ def _timebounds(requestContext):
 
   return (startTime, endTime, now)
 
-def prefetchRemoteData(requestContext, targets):
-  # if required, extract pathExprs from targets and fetch data from all remote nodes
+def _prefetchMetricKey(pathExpression, start, end):
+  return '-'.join([pathExpression, str(start), str(end)])
+
+def prefetchRemoteData(requestContext, pathExpressions):
+  # if required, fetch data from all remote nodes
   # storing the result in a big hash of the form:
   # data[node][hash(originalPathExpression, start, end)] = [ matchingSeries, matchingSeries2, ... ]
 
@@ -273,7 +276,6 @@ def prefetchRemoteData(requestContext, targets):
   if requestContext['localOnly']:
     return prefetchedRemoteData
 
-  pathExpressions = extractPathExpressions(targets)
   (startTime, endTime, now) = _timebounds(requestContext)
   remote_nodes = [ RemoteNode(store, pathExpressions, True) for store in STORE.remote_stores ]
 
@@ -290,29 +292,29 @@ def prefetchRemoteData(requestContext, targets):
   for (node, results) in nodesFetchResults:
     # prefill result with empty list
     # Needed to be able to detect if a query has already been made
-    prefetchedRemoteData[node.host] = {}
+    prefetchedRemoteData[node.store.host] = {}
     for pe in pathExpressions:
-      prefetchedRemoteData[node.host][hash(pe, startTime, endTime)] = []
+      prefetchedRemoteData[node.store.host][_prefetchMetricKey(pe, startTime, endTime)] = []
 
     for series in results:
       # series.pathExpression is original target, ie. containing wildcards
-      k = hashData(series.pathExpression, startTime, endTime)
-      if prefetchedRemoteData[node.host][k] is not None:
+      k = _prefetchMetricKey(series['pathExpression'], startTime, endTime)
+      if prefetchedRemoteData[node.store.host][k] is not None:
         # This should not be needed because of above filling with [],
         # but better be safe than sorry
-        prefetchedRemoteData[node.host][k].append(series)
+        prefetchedRemoteData[node.store.host][k].append(series)
       else:
-        prefetchedRemoteData[node.host][k] = [series]
+        prefetchedRemoteData[node.store.host][k] = [series]
 
   return prefetchedRemoteData
 
-def prefetchLookup(requestContext, node, pathExpression):
+def prefetchLookup(requestContext, node):
   # Returns a seriesList if found in cache
   # or None is key doesn't exist (aka prefetch didn't cover this pathExpr / timerange
   (start, end, now) = _timebounds(requestContext)
   try:
-    cache = requestContext['prefetchedRemoteData'][node]
-    r = cache[pathExpression][hashData(pathExpression, start, end)]
+    cache = requestContext['prefetchedRemoteData'][node.store.host]
+    r = cache[_prefetchMetricKey(node.metric_path, start, end)]
   except AttributeError:
     r = None
 

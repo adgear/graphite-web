@@ -34,7 +34,8 @@ except ImportError:  # Otherwise we fall back to Graphite's bundled version
 from graphite.util import getProfileByUsername, json, unpickle
 from graphite.remote_storage import HTTPConnectionWithTimeout
 from graphite.logger import log
-from graphite.render.evaluator import evaluateTarget
+from graphite.render.evaluator import evaluateTarget, extractPathExpressions
+from graphite.render.datalib import prefetchRemoteData
 from graphite.render.attime import parseATTime
 from graphite.render.functions import PieFunctions
 from graphite.render.hashing import hashRequest, hashData
@@ -113,7 +114,8 @@ def renderView(request):
       targets = requestOptions['targets']
       if settings.PREFETCH_REMOTE_DATA:
         t = time()
-        requestContext['prefetchedRemoteData'] = prefetchRemoteData(requestContext, targets)
+        pathExpressions = extractPathExpressions(targets)
+        requestContext['prefetchedRemoteData'] = prefetchRemoteData(requestContext, pathExpressions)
         log.rendering("Prefetching remote data took %.6f" % (time() - t))
       for target in targets:
         t = time()
