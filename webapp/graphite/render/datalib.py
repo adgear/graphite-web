@@ -19,7 +19,7 @@ from django.conf import settings
 from graphite.logger import log
 from graphite.storage import STORE, LOCAL_STORE
 from graphite.remote_storage import RemoteNode
-from graphite.render.hashing import ConsistentHashRing
+from graphite.render.hashing import ConsistentHashRing, hashData
 from graphite.util import unpickle, epoch
 
 # datacratic local
@@ -41,6 +41,7 @@ class TimeSeries(list):
     self.consolidationFunc = consolidate
     self.valuesPerPoint = 1
     self.options = {}
+    self.pathExpression = None
 
 
   def __iter__(self):
@@ -97,6 +98,7 @@ class TimeSeries(list):
       'end' : self.end,
       'step' : self.step,
       'values' : list(self),
+      'pathExpression' : self.pathExpression
     }
 
 
@@ -254,13 +256,72 @@ CarbonLink = CarbonLinkPool(hosts, settings.CARBONLINK_TIMEOUT)
 
 if settings.REMOTE_STORE_USE_THREADS:
   threadpool = ThreadPool(settings.REMOTE_STORE_THREADPOOL_SIZE)
+      
+def _timebounds(requestContext):
+  startTime = int(epoch(requestContext['startTime']))
+  endTime = int(epoch(requestContext['endTime']))
+  now = int(epoch(requestContext['now']))
+
+  return (startTime, endTime, now)
+
+def prefetchRemoteData(requestContext, targets):
+  # if required, extract pathExprs from targets and fetch data from all remote nodes
+  # storing the result in a big hash of the form:
+  # data[node][hash(originalPathExpression, start, end)] = [ matchingSeries, matchingSeries2, ... ]
+
+  prefetchedRemoteData = {}
+  if requestContext['localOnly']:
+    return prefetchedRemoteData
+
+  pathExpressions = extractPathExpressions(targets)
+  (startTime, endTime, now) = _timebounds(requestContext)
+  remote_nodes = [ RemoteNode(store, pathExpressions, True) for store in STORE.remote_stores ]
+
+  def _nodeFetch( (node, startTime, endTime, now) ):
+    r = node.fetch(startTime, endTime, now)
+    return (node, r)
+
+  nodesFetchTuples = [ (node, startTime, endTime, now) for node in remote_nodes ]
+  if settings.REMOTE_STORE_USE_THREADS:
+    nodesFetchResults = threadpool.map(_nodeFetch, nodesFetchTuples)
+  else:
+    nodesFetchResults = map(_nodeFetch, nodesFetchTuples)
+
+  for (node, results) in nodesFetchResults:
+    # prefill result with empty list
+    # Needed to be able to detect if a query has already been made
+    prefetchedRemoteData[node.host] = {}
+    for pe in pathExpressions:
+      prefetchedRemoteData[node.host][hash(pe, startTime, endTime)] = []
+
+    for series in results:
+      # series.pathExpression is original target, ie. containing wildcards
+      k = hashData(series.pathExpression, startTime, endTime)
+      if prefetchedRemoteData[node.host][k] is not None:
+        # This should not be needed because of above filling with [],
+        # but better be safe than sorry
+        prefetchedRemoteData[node.host][k].append(series)
+      else:
+        prefetchedRemoteData[node.host][k] = [series]
+
+  return prefetchedRemoteData
+
+def prefetchLookup(requestContext, node, pathExpression):
+  # Returns a seriesList if found in cache
+  # or None is key doesn't exist (aka prefetch didn't cover this pathExpr / timerange
+  (start, end, now) = _timebounds(requestContext)
+  try:
+    cache = requestContext['prefetchedRemoteData'][node]
+    r = cache[pathExpression][hashData(pathExpression, start, end)]
+  except AttributeError:
+    r = None
+
+  return r
 
 # Data retrieval API
 def fetchData(requestContext, pathExpr):
   seriesList = []
-  startTime = int(epoch(requestContext['startTime']))
-  endTime = int(epoch(requestContext['endTime']))
-  now = int(epoch(requestContext['now']))
+  (startTime, endTime, now) = _timebounds(requestContext)
 
   dbFiles = [dbFile for dbFile in LOCAL_STORE.find(pathExpr)]
 
@@ -295,9 +356,19 @@ def fetchData(requestContext, pathExpr):
     remote_nodes = [ RemoteNode(store, pathExpr, True) for store in STORE.remote_stores ]
 
     def _nodeFetch( (node, startTime, endTime, now) ):
-      r = node.fetch(startTime, endTime, now)
+      if settings.PREFETCH_REMOTE_DATA:
+        r = prefetchLookup(requestContext, node)
+        # Will be either:
+        #   []: prefetch done, returned no data. Do not fetch
+        #   seriesList: prefetch done, returned data, do not fetch
+        #   None: prefetch not done, FETCH
+        if r is None:
+          r = node.fetch(startTime, endTime, now)
+      else:
+        r = node.fetch(startTime, endTime, now)
       return (node, r)
 
+    # This thread stuff is not needed if PREFETCH_REMOTE_DATA is in effect
     nodesFetchTuples = [ (node, startTime, endTime, now) for node in remote_nodes ]
     if settings.REMOTE_STORE_USE_THREADS:
       nodesFetchResults = threadpool.map(_nodeFetch, nodesFetchTuples)

@@ -59,6 +59,7 @@ def renderView(request):
     'endTime' : requestOptions['endTime'],
     'now': requestOptions['now'],
     'localOnly' : requestOptions['localOnly'],
+    'prefetchedRemoteData' : {},
     'data' : []
   }
   data = requestContext['data']
@@ -109,7 +110,12 @@ def renderView(request):
     if cachedData is not None:
       requestContext['data'] = data = cachedData
     else: # Have to actually retrieve the data now
-      for target in requestOptions['targets']:
+      targets = requestOptions['targets']
+      if settings.PREFETCH_REMOTE_DATA:
+        t = time()
+        requestContext['prefetchedRemoteData'] = prefetchRemoteData(requestContext, targets)
+        log.rendering("Prefetching remote data took %.6f" % (time() - t))
+      for target in targets:
         t = time()
         seriesList = evaluateTarget(requestContext, target)
         log.rendering("Retrieval of %s took %.6f" % (target, time() - t))

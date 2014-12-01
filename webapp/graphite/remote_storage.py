@@ -110,13 +110,19 @@ class RemoteNode:
     if not self.__isLeaf:
       return []
 
+    # XXX not nice
+    if isinstance(self.metric_path, list):
+      targets = [ ('targets', v) for v in self.metric_path ]
+    else:
+      targets = ('target', self.metric_path)
+      
     query_params = [
       ('local', '1'),
-      ('target', self.metric_path),
       ('format', 'pickle'),
       ('from', str( int(startTime) )),
       ('until', str( int(endTime) ))
     ]
+    query_params.extend(targets)
     if now is not None:
       query_params.append(('now', str( int(now) )))
     query_string = urlencode(query_params)
