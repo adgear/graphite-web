@@ -321,7 +321,7 @@ def prefetchLookup(requestContext, node):
   try:
     cache = requestContext['prefetchedRemoteData'][node.store.host]
     r = cache[_prefetchMetricKey(node.metric_path, start, end)]
-  except AttributeError:
+  except (AttributeError, KeyError):
     r = None
 
   return r
