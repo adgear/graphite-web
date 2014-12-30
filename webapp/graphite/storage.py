@@ -7,9 +7,6 @@ from graphite.logger import log
 from graphite.remote_storage import RemoteStore
 from graphite.util import unpickle
 
-# datacratic local
-from multiprocessing.pool import ThreadPool
-
 try:
   import rrdtool
 except ImportError:
@@ -43,9 +40,6 @@ class Store:
     self.remote_hosts = remote_hosts
     self.remote_stores = [ RemoteStore(host) for host in remote_hosts if not is_local_interface(host) ]
 
-    if settings.REMOTE_STORE_USE_THREADS:
-      self.threadpool = ThreadPool(settings.REMOTE_STORE_THREADPOOL_SIZE)
- 
     if not (directories or remote_hosts):
       raise ValueError("directories and remote_hosts cannot both be empty")
 
@@ -78,7 +72,7 @@ class Store:
       for match in find(directory, query):
         return match
 
-    # If nothing found search remotely
+    # If nothing found earch remotely
     remote_requests = [ r.find(query) for r in self.remote_stores if r.available ]
 
     for request in remote_requests:
@@ -86,17 +80,10 @@ class Store:
         return match
 
 
-  def _remote_find(self, (remote, query)):
-    return remote.find(query)
-
   def find_all(self, query):
     # Start remote searches
     found = set()
-    if settings.REMOTE_STORE_USE_THREADS:
-      remote_query_tuples = [ (r, query) for r in self.remote_stores if r.available ]
-      remote_requests = self.threadpool.map(self._remote_find, remote_query_tuples)
-    else:
-      remote_requests = [ r.find(query) for r in self.remote_stores if r.available ]
+    remote_requests = [ r.find(query) for r in self.remote_stores if r.available ]
 
     # Search locally
     for directory in self.directories:
