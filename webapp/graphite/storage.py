@@ -79,15 +79,12 @@ class Store:
         return match
 
     # If nothing found search remotely
-    if settings.REMOTE_STORE_USE_THREADS:
-      remote_query_tuples = [ (r, query) for r in self.remote_stores if r.available ]
-      remote_requests = self.threadpool.map(self._remote_find, remote_query_tuples)
-    else:
-      remote_requests = [ r.find(query) for r in self.remote_stores if r.available ]
+    remote_requests = [ r.find(query) for r in self.remote_stores if r.available ]
 
     for request in remote_requests:
       for match in request.get_results():
         return match
+
 
   def _remote_find(self, (remote, query)):
     return remote.find(query)
