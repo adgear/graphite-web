@@ -137,6 +137,7 @@ FLUSHRRDCACHED = ''
 #
 WHISPER_FETCH_STRATEGY = None
 WHISPER_FETCH_STRATEGY_COARSE_THRESHOLD = float("inf")
+PREFETCH_REMOTE_DATA = False
 
 ## Load our local_settings
 try:
