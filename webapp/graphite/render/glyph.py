@@ -1029,9 +1029,9 @@ class LineGraph(Graph):
       # Use izip to use iteration on the TimeSeries objects so we honor
       # consolidation. (izip will stop at the end of the shortest input, so
       # this behavior is backwards compatible with earlier code.)
-      yMaxValue = safePercentile(map(safeSum, itertools.izip(*finite_series)))
+      yMaxValue = safeMax(map(safeSum, itertools.izip(*finite_series)))
     else:
-      yMaxValue = safePercentile(map(safeMax, finite_series))
+      yMaxValue = safeMax(map(safeMax, finite_series))
 
     if yMinValue is None:
       yMinValue = 0.0
@@ -1178,11 +1178,11 @@ class LineGraph(Graph):
       yMinValueR = safeMin( [safeMin(series) for series in Rdata if not series.options.get('drawAsInfinite')] )
 
     if self.areaMode == 'stacked':
-      yMaxValueL = safeSum( [safePercentile(series) for series in Ldata] )
-      yMaxValueR = safeSum( [safePercentile(series) for series in Rdata] )
+      yMaxValueL = safeSum( [safeMax(series) for series in Ldata] )
+      yMaxValueR = safeSum( [safeMax(series) for series in Rdata] )
     else:
-      yMaxValueL = safeMax( [safePercentile(series) for series in Ldata] )
-      yMaxValueR = safeMax( [safePercentile(series) for series in Rdata] )
+      yMaxValueL = safeMax( [safeMax(series) for series in Ldata] )
+      yMaxValueR = safeMax( [safeMax(series) for series in Rdata] )
 
     if yMinValueL is None:
       yMinValueL = 0.0
