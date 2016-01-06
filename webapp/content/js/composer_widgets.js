@@ -317,7 +317,7 @@ function showShortUrl() {
     Ext.Ajax.request({
         method: 'GET',
         url: '/s/render/?' + Composer.url.queryString,
-        callback: showUrl,
+        callback: showUrl
     });
 }
 
@@ -584,7 +584,7 @@ var GraphDataWindow = {
           menu: {
             subMenuAlign: 'tr-tl',
             defaults: {
-              defaultAlign: 'tr-tl',
+              defaultAlign: 'tr-tl'
             },
             items: [
               { text: 'Move Up', handler: this.moveTargetUp.createDelegate(this) },
@@ -1197,6 +1197,7 @@ function createFunctionsMenu() {
         {text: 'Transform Nulls', handler: applyFuncToEachWithInput('transformNull', 'Please enter the value to transform null values to')},
         {text: 'Substring', handler: applyFuncToEachWithInput('substr', 'Enter a starting position')},
         {text: 'Group', handler: applyFuncToAll('group')},
+        {text: 'sortByName', handler: applyFuncToEach('sortByName')},
         {text: 'Area Between', handler: applyFuncToEach('areaBetween')},
 //        {text: 'GroupByNode', handler: applyFuncToEachWithInput('group')}, // requires 2 parameters
 //        {text: 'Add Threshold Line', handler: applyFuncToEachWithInput('threshold', 'Enter a threshold value')},

@@ -117,14 +117,24 @@ def lcm(a,b):
   return a * b
 
 def normalize(seriesLists):
-  seriesList = reduce(lambda L1,L2: L1+L2,seriesLists)
-  step = reduce(lcm,[s.step for s in seriesList])
-  for s in seriesList:
-    s.consolidate( step / s.step )
-  start = min([s.start for s in seriesList])
-  end = max([s.end for s in seriesList])
-  end -= (end - start) % step
-  return (seriesList,start,end,step)
+  if seriesLists:
+    seriesList = reduce(lambda L1,L2: L1+L2,seriesLists)
+    if seriesList:
+      step = reduce(lcm,[s.step for s in seriesList])
+      for s in seriesList:
+        s.consolidate( step / s.step )
+      start = min([s.start for s in seriesList])
+      end = max([s.end for s in seriesList])
+      end -= (end - start) % step
+      return (seriesList,start,end,step)
+  raise NormalizeEmptyResultError()
+
+class NormalizeEmptyResultError(Exception):
+  """
+  Error thrown by the function 'normalize'
+  when it has an empty result
+  """
+  pass
 
 def formatPathExpressions(seriesList):
    # remove duplicates
@@ -234,15 +244,24 @@ def averageSeriesWithWildcards(requestContext, seriesList, *position): #XXX
 
 def diffSeries(requestContext, *seriesLists):
   """
-  Can take two or more metrics, or a single metric and a constant.
-  Subtracts parameters 2 through n from parameter 1.
+  Subtracts series 2 through n from series 1.
 
   Example:
 
   .. code-block:: none
 
     &target=diffSeries(service.connections.total,service.connections.failed)
-    &target=diffSeries(service.connections.total,5)
+
+  To diff a series and a constant, one should use offset instead of (or in
+  addition to) diffSeries
+
+  Example:
+
+  .. code-block:: none
+
+    &target=offset(service.connections.total,-5)
+
+    &target=offset(diffSeries(service.connections.total,service.connections.failed),-4)
 
   """
   try:
@@ -1630,7 +1649,10 @@ def removeAbovePercentile(requestContext, seriesList, n):
   for s in seriesList:
     s.name = 'removeAbovePercentile(%s, %d)' % (s.name, n)
     s.pathExpression = s.name
-    percentile = nPercentile(requestContext, [s], n)[0][0]
+    try:
+      percentile = nPercentile(requestContext, [s], n)[0][0]
+    except IndexError:
+      continue
     for (index, val) in enumerate(s):
       if val > percentile:
         s[index] = None
@@ -1659,7 +1681,10 @@ def removeBelowPercentile(requestContext, seriesList, n):
   for s in seriesList:
     s.name = 'removeBelowPercentile(%s, %d)' % (s.name, n)
     s.pathExpression = s.name
-    percentile = nPercentile(requestContext, [s], n)[0][0]
+    try:
+      percentile = nPercentile(requestContext, [s], n)[0][0]
+    except IndexError:
+      continue
     for (index, val) in enumerate(s):
       if val < percentile:
         s[index] = None
@@ -1696,6 +1721,30 @@ def limit(requestContext, seriesList, n):
 
   """
   return seriesList[0:n]
+
+def sortByName(requestContext, seriesList, natural = False):
+  """
+  Takes one metric or a wildcard seriesList.
+  Sorts the list of metrics by the metric name using either alphabetical order or natural sorting.
+  Natural sorting allows names containing numbers to be sorted more naturally, e.g:
+  - Alphabetical sorting: server1, server11, server12, server2
+  - Natural sorting: server1, server2, server11, server12
+  """
+  def paddedName(name):
+    return re.sub("(\d+)", lambda x: "{0:010}".format(int(x.group(0))), name)
+
+  def compare(x, y):
+    return cmp(x.name, y.name)
+
+  def natSortCompare(x, y):
+    return cmp(paddedName(x.name), paddedName(y.name))
+
+  if natural:
+    seriesList.sort(natSortCompare)
+  else:
+    seriesList.sort(compare)
+
+  return seriesList
 
 def sortByMaxima(requestContext, seriesList):
   """
@@ -3015,6 +3064,7 @@ SeriesFunctions = {
   'minimumBelow' : minimumBelow,
   'nPercentile' : nPercentile,
   'limit' : limit,
+  'sortByName' : sortByName,
   'sortByMaxima' : sortByMaxima,
   'sortByMinima' : sortByMinima,
   'useSeriesAbove': useSeriesAbove,

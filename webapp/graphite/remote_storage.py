@@ -60,7 +60,10 @@ class FindRequest:
     query_string = urlencode(query_params)
 
     try:
-      self.connection.request('GET', '/metrics/find/?' + query_string)
+      if settings.REMOTE_STORE_USE_POST:
+        self.connection.request('POST', '/metrics/find/', query_string)
+      else:
+        self.connection.request('GET', '/metrics/find/?' + query_string)
     except:
       self.store.fail()
       if not self.suppressErrors:
@@ -74,12 +77,15 @@ class FindRequest:
     if not self.connection:
       self.send()
 
-    try:
+    try:  # Python 2.7+, use buffering of HTTP responses
+      response = self.connection.getresponse(buffering=True)
+    except TypeError:  # Python 2.6 and older
       response = self.connection.getresponse()
+
+    try:
       assert response.status == 200, "received error response %s - %s" % (response.status, response.reason)
       result_data = response.read()
       results = unpickle.loads(result_data)
-
     except:
       self.store.fail()
       if not self.suppressErrors:
@@ -135,8 +141,14 @@ class RemoteNode:
 
     connection = HTTPConnectionWithTimeout(self.store.host)
     connection.timeout = settings.REMOTE_STORE_FETCH_TIMEOUT
-    connection.request('GET', '/render/?' + query_string)
-    response = connection.getresponse()
+    if settings.REMOTE_STORE_USE_POST:
+      connection.request('POST', '/render/', query_string)
+    else:
+      connection.request('GET', '/render/?' + query_string)
+    try:  # Python 2.7+, use buffering of HTTP responses
+      response = connection.getresponse(buffering=True)
+    except TypeError:  # Python 2.6 and older
+      response = connection.getresponse()
     assert response.status == 200, "Failed to retrieve remote data: %d %s" % (response.status, response.reason)
     rawData = response.read()
 
